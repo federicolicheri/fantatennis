@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FantaTennis">
+<meta name="theme-color" content="#111111">
+<title>FantaTennis · Clay Kings</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --clay:#D85A30;--clay-dark:#993C1D;--clay-light:rgba(216,90,48,0.1);
+  --dark:#111;--dark2:#1A1A1A;--dark3:#242424;
+  --text:#F0EDE8;--text2:rgba(240,237,232,0.5);--text3:rgba(240,237,232,0.2);
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --card:#1C1C1C;--card2:#222;
+  --green:#27AE60;--blue:#2980B9;--yellow:#F39C12;--red:#E74C3C;
+}
+html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;color:var(--text);overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ---- LOADING ---- */
+#loadingScreen{position:fixed;inset:0;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999}
+.load-logo{font-family:'Bebas Neue',sans-serif;font-size:42px;color:var(--clay);letter-spacing:4px;margin-bottom:8px}
+.load-logo span{color:var(--text)}
+.load-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
+.load-bar{width:160px;height:2px;background:var(--border2);border-radius:2px;overflow:hidden}
+.load-bar-fill{height:100%;background:var(--clay);border-radius:2px;animation:loadfill 1.2s ease forwards}
+@keyframes loadfill{from{width:0}to{width:100%}}
+
+/* ---- LOGIN ---- */
+#loginScreen{display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:24px;position:relative;background:var(--dark)}
+.login-bg{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(216,90,48,0.07) 0%,transparent 65%);pointer-events:none}
+.login-card{background:var(--dark2);border:0.5px solid var(--border2);border-radius:14px;padding:28px;width:100%;max-width:360px;position:relative;z-index:1}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-icon{width:54px;height:54px;background:var(--dark3);border-radius:13px;border:0.5px solid var(--border2);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.login-title{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:2px}
+.login-title span{color:var(--clay)}
+.login-sub{font-size:12px;color:var(--text2);margin-top:3px}
+.lfield{margin-bottom:13px}
+.llabel{font-size:11px;color:var(--text2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px}
+.linput{width:100%;padding:9px 12px;background:var(--dark3);border:0.5px solid var(--border2);border-radius:7px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.15s}
+.linput:focus{border-color:var(--clay)}
+.linput::placeholder{color:var(--text2)}
+.lbtn{width:100%;padding:11px;background:var(--clay);border:none;border-radius:7px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;transition:background 0.15s}
+.lbtn:hover{background:var(--clay-dark)}
+.lbtn:disabled{background:var(--border2);cursor:default}
+.lerr{font-size:11px;color:var(--red);margin-top:8px;display:none}
+.lerr.on{display:block}
+.lnote{text-align:center;font-size:11px;color:var(--text2);margin-top:12px}
+.session-note{text-align:center;font-size:11px;color:var(--text2);margin-top:10px;display:flex;align-items:center;justify-content:center;gap:5px}
+.scheck{width:14px;height:14px;border-radius:3px;background:var(--clay);display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#fff}
+
+/* ---- CHANGE PWD ---- */
+#changePwdScreen{display:none;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:24px}
+.cpwd-card{background:var(--dark2);border:0.5px solid var(--border2);border-radius:14px;padding:28px;width:100%;max-width:360px}
+
+/* ---- APP ---- */
+#appScreen{display:none;flex-direction:column;flex:1;overflow:hidden}
+.topnav{background:var(--dark2);border-bottom:0.5px solid var(--border2);height:46px;display:flex;align-items:center;padding:0 16px;gap:14px;flex-shrink:0}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--clay);letter-spacing:2px;cursor:pointer}
+.logo span{color:var(--text)}
+.season{font-size:11px;color:var(--text2);flex:1}
+.nav-user{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:background 0.15s}
+.nav-user:hover{background:rgba(255,255,255,0.05)}
+.nav-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;overflow:hidden;flex-shrink:0}
+.nav-av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.nav-name{font-size:12px;color:var(--text2)}
+
+/* LAYOUT */
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:52px;background:var(--dark2);border-right:0.5px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;flex-shrink:0}
+.ni{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;transition:all 0.15s;color:var(--text2);position:relative}
+.ni:hover{background:rgba(255,255,255,0.05);color:var(--text)}
+.ni.active{background:var(--clay-light);color:var(--clay)}
+.ni-spacer{flex:1}
+.ni-tooltip{position:absolute;left:48px;background:var(--dark2);border:0.5px solid var(--border2);color:var(--text);font-size:11px;padding:4px 9px;border-radius:5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:50}
+.ni:hover .ni-tooltip{opacity:1}
+
+/* MAIN */
+.main{flex:1;overflow-y:auto;padding:18px;background:var(--dark)}
+.main::-webkit-scrollbar{width:3px}
+.main::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.scr{display:none}.scr.on{display:block}
+
+/* COMMON */
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:9px;padding:14px;margin-bottom:10px}
+.srow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.sbox{background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:12px;text-align:center}
+.sv{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--text);line-height:1}
+.sv.a{color:var(--clay)}
+.sl{font-size:10px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:0.4px}
+.stitle{font-size:10px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px}
+.hrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.rr{display:flex;align-items:center;gap:9px;padding:8px 12px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:4px;background:var(--card);transition:all 0.15s}
+.rr.clickable{cursor:pointer}.rr.clickable:hover{border-color:var(--border2)}
+.rr.r1{border-left:2px solid var(--clay)}
+.rpos{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--text2);width:24px;text-align:center;flex-shrink:0}
+.rpos.p1{color:var(--clay)}
+.rav{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex-shrink:0;overflow:hidden}
+.rav img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.ri{flex:1}
+.rname{font-size:12px;font-weight:500;color:var(--text)}
+.rmeta{font-size:10px;color:var(--text2)}
+.rpts{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text)}
+.rdelta{font-size:10px;font-weight:500;padding:2px 6px;border-radius:20px}
+.rdelta.p{background:rgba(39,174,96,0.12);color:var(--green)}
+.rdelta.n{background:rgba(231,76,60,0.12);color:var(--red)}
+.rdelta.z{color:var(--text2)}
+.tabs{display:flex;border-bottom:0.5px solid var(--border);margin-bottom:14px}
+.tab{padding:7px 13px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;border:none;background:transparent;font-family:'DM Sans',sans-serif}
+.tab.active{color:var(--clay);border-bottom-color:var(--clay)}
+.badge{font-size:10px;border-radius:4px;padding:2px 7px;font-weight:500;display:inline-block}
+.badge.slam{background:rgba(216,90,48,0.15);color:#F0997B}
+.badge.k1000{background:rgba(41,128,185,0.15);color:#7FC4E8}
+.badge.done{background:rgba(39,174,96,0.1);color:var(--green)}
+.badge.soon{background:rgba(255,255,255,0.06);color:var(--text2)}
+.badge.adm{background:rgba(216,90,48,0.15);color:#F0997B}
+.btn{padding:7px 14px;border:none;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.15s}
+.btn-p{background:var(--clay);color:#fff}.btn-p:hover{background:var(--clay-dark)}
+.btn-g{background:transparent;border:0.5px solid var(--border2);color:var(--text2)}.btn-g:hover{color:var(--text)}
+.btn-d{background:transparent;border:0.5px solid rgba(231,76,60,0.25);color:var(--red)}.btn-d:hover{background:rgba(231,76,60,0.08)}
+
+/* UBAN */
+.uban{background:linear-gradient(135deg,var(--dark2),var(--dark3));border:0.5px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:14px}
+
+/* TORNEO */
+.tc{background:var(--card);border:0.5px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s}
+.tc:hover{border-color:var(--border2)}
+.tch{padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.tn{font-size:13px;font-weight:500}
+.tm{font-size:10px;color:var(--text2);margin-top:2px}
+
+/* PROFILE */
+.phero{background:var(--dark2);border-radius:10px;padding:16px;display:flex;align-items:center;gap:14px;margin-bottom:14px;border:0.5px solid var(--border)}
+.pav{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:500;color:#fff;overflow:hidden;position:relative;flex-shrink:0}
+.pav img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.pav-edit{position:absolute;bottom:0;right:0;width:20px;height:20px;border-radius:50%;background:var(--clay);border:2px solid var(--dark2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:9px;color:#fff;z-index:2}
+
+/* ADMIN TABLE */
+.atable{width:100%;border-collapse:collapse}
+.atable th{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;padding:8px 10px;text-align:left;border-bottom:0.5px solid var(--border);font-weight:500}
+.atable td{padding:9px 10px;font-size:11px;border-bottom:0.5px solid var(--border);vertical-align:middle}
+.atable tr:last-child td{border-bottom:none}
+.atable tr:hover td{background:var(--card2)}
+.sbadge{font-size:10px;border-radius:20px;padding:2px 8px;font-weight:500}
+.sbadge.ok{background:rgba(39,174,96,0.12);color:var(--green)}
+.sbadge.pend{background:rgba(243,156,18,0.12);color:var(--yellow)}
+.sbadge.adm{background:rgba(216,90,48,0.15);color:#F0997B}
+
+/* TOAST */
+.toast{position:fixed;bottom:16px;right:16px;background:var(--dark2);border:0.5px solid var(--border2);color:var(--text);font-size:12px;border-radius:8px;padding:10px 16px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:9999;max-width:280px}
+.toast.on{opacity:1}
+
+/* SPINNER */
+.spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--clay);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.empty-state{text-align:center;padding:32px 20px;color:var(--text2);font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:10px}
+
+/* ---- MOBILE ---- */
+@media(max-width:600px){
+  html,body{height:100%;overflow:hidden}
+  .app{height:100dvh;display:flex;flex-direction:column}
+
+  /* Top nav più compatto */
+  .topnav{height:44px;padding:0 12px;gap:8px}
+  .logo{font-size:18px}
+  .season{display:none}
+  .nav-name{display:none}
+
+  /* Layout: sidebar in basso invece che a sinistra */
+  .layout{flex-direction:column;flex:1;overflow:hidden}
+  .sidebar{
+    width:100%!important;height:52px;flex-direction:row;
+    justify-content:space-around;align-items:center;
+    border-right:none;border-top:0.5px solid var(--border2);
+    padding:0 8px;gap:0;order:2;flex-shrink:0
+  }
+  .ni{width:44px;height:44px;font-size:18px}
+  .ni-tooltip{display:none}
+  .ni-spacer{display:none}
+
+  /* Main: sopra la sidebar */
+  .main{flex:1;overflow-y:auto;padding:12px;order:1}
+
+  /* Stats row: 2x2 invece di 4x1 */
+  .srow{grid-template-columns:repeat(2,1fr)}
+
+  /* Card più compatte */
+  .card{padding:12px}
+
+  /* Login */
+  .login-card{padding:20px;border-radius:10px}
+
+  /* Torneo tabs scrollabili */
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{white-space:nowrap;padding:7px 10px;font-size:11px}
+
+  /* Profilo hero */
+  .phero{flex-direction:column;text-align:center;padding:16px}
+  .phero > div:last-child{align-self:center}
+
+  /* Admin table: semplificata */
+  .atable th:nth-child(4),.atable td:nth-child(4){display:none}
+
+  /* Draft: colonne → righe */
+  #tContent [style*="grid-template-columns:220px"]{
+    grid-template-columns:1fr!important
+  }
+  #tContent [style*="grid-template-columns:1fr 1fr"]{
+    grid-template-columns:1fr!important
+  }
+
+  /* Bracket: scrollabile orizzontalmente */
+  #bracketContainer{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* uban */
+  .uban{padding:12px}
+  .uban > button{flex-shrink:0}
+
+  /* Pulsanti più grandi su touch */
+  .btn{padding:9px 14px;font-size:12px}
+  .lbtn{padding:13px}
+
+  /* Change pwd card */
+  .cpwd-card{padding:20px}
+
+  /* Rank rows */
+  .rr{padding:7px 10px}
+  .rpts{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="load-logo">Fanta<span>Tennis</span></div>
+  <div class="load-sub">Clay Kings · Stagione 2025/2026</div>
+  <div class="load-bar"><div class="load-bar-fill"></div></div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-bg"></div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-icon">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+          <circle cx="13" cy="13" r="10" stroke="#D85A30" stroke-width="1.5"/>
+          <path d="M6 13 Q13 7 20 13" stroke="#F0EDE8" stroke-width="1.2" fill="none"/>
+          <path d="M6 13 Q13 19 20 13" stroke="#F0EDE8" stroke-width="1.2" fill="none"/>
+          <line x1="13" y1="3" x2="13" y2="23" stroke="#F0EDE8" stroke-width="1.2"/>
+        </svg>
+      </div>
+      <div class="login-title">Fanta<span>Tennis</span></div>
+      <div class="login-sub">Accedi con le credenziali ricevute dall'admin</div>
+    </div>
+    <div class="lfield">
+      <label class="llabel">Nome utente</label>
+      <input class="linput" id="loginUser" placeholder="es. fritz" autocomplete="username">
+    </div>
+    <div class="lfield">
+      <label class="llabel">Password</label>
+      <input class="linput" id="loginPwd" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="lbtn" id="loginBtn" onclick="doLogin()">Entra</button>
+    <div class="lerr" id="loginErr">Nome utente o password non corretti.</div>
+    <div class="session-note"><span class="scheck">✓</span> Rimarrai connesso automaticamente</div>
+    <div class="lnote">Non riesci ad accedere? Contatta Fritz (admin).</div>
+  </div>
+</div>
+
+<!-- CHANGE PWD -->
+<div id="changePwdScreen">
+  <div class="cpwd-card">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:28px;margin-bottom:8px">🔑</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:4px">Scegli una nuova password</div>
+      <div style="font-size:12px;color:var(--text2)">Primo accesso — imposta una password personale.</div>
+    </div>
+    <div class="lfield">
+      <label class="llabel">Nuova password</label>
+      <input class="linput" id="newPwd1" type="password" placeholder="min. 8 caratteri">
+    </div>
+    <div class="lfield">
+      <label class="llabel">Conferma password</label>
+      <input class="linput" id="newPwd2" type="password" placeholder="ripeti la password" onkeydown="if(event.key==='Enter')doChangePwd()">
+    </div>
+    <button class="lbtn" onclick="doChangePwd()">Salva e accedi</button>
+    <div class="lerr" id="cpwdErr">Le password non coincidono o sono troppo corte.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen">
+  <div class="topnav">
+    <div class="logo" onclick="go('home')">Fanta<span>Tennis</span></div>
+    <div class="season">Clay Kings · Stagione 2025/2026</div>
+    <div class="nav-user" onclick="go('profilo')">
+      <div class="nav-av" id="navAv" style="background:#D85A30">FR</div>
+      <div class="nav-name" id="navName">Fritz</div>
+    </div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="ni active" id="ni-home"    onclick="go('home')"    title="Home">🏠<span class="ni-tooltip">Home</span></div>
+      <div class="ni"        id="ni-tornei"  onclick="go('tornei')"  title="Tornei">🎾<span class="ni-tooltip">Tornei</span></div>
+      <div class="ni"        id="ni-class"   onclick="go('class')"   title="Classifica">🏆<span class="ni-tooltip">Classifica</span></div>
+      <div class="ni"        id="ni-profilo" onclick="go('profilo')" title="Profilo">👤<span class="ni-tooltip">Profilo</span></div>
+      <div class="ni-spacer"></div>
+      <div class="ni"        id="ni-admin"   onclick="go('admin')"   title="Admin" style="display:none">⚙️<span class="ni-tooltip">Admin</span></div>
+    </div>
+    <div class="main" id="mainContent">
+
+      <!-- HOME -->
+      <div class="scr on" id="s-home">
+        <div class="uban">
+          <div style="font-size:26px;flex-shrink:0">🎾</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:500">Roland Garros 2026</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:1px">Slam · Parigi · Terra · 26 mag – 8 giu 2026</div>
+          </div>
+          <button class="btn btn-p" onclick="go('tornei')">Vai →</button>
+        </div>
+        <div class="srow">
+          <div class="sbox"><div class="sv a" id="homePts">0</div><div class="sl">I tuoi punti</div></div>
+          <div class="sbox"><div class="sv" id="homePos">—</div><div class="sl">Posizione</div></div>
+          <div class="sbox"><div class="sv" id="homeVitt">0</div><div class="sl">Vittorie</div></div>
+          <div class="sbox"><div class="sv a" id="homeLast">0</div><div class="sl">Ultimo torneo</div></div>
+        </div>
+        <div class="stitle">Classifica — Clay Kings</div>
+        <div id="homeRank"><div class="empty-state"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- TORNEI -->
+      <div class="scr" id="s-tornei">
+        <div class="hrow"><div class="stitle" style="margin:0">Tornei</div></div>
+        <div id="torneiList"><div class="empty-state"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- TORNEO DETAIL -->
+      <div class="scr" id="s-torneo">
+        <div class="hrow"><button class="btn btn-g" onclick="go('tornei')">← Tornei</button></div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:18px;font-weight:500" id="tTitle">—</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px" id="tMeta">—</div>
+        </div>
+        <div class="tabs" id="tTabs">
+          <button class="tab active" onclick="tTab('info',this)">Info</button>
+          <button class="tab" onclick="tTab('tabellone',this)">Tabellone</button>
+          <button class="tab" onclick="tTab('draft',this)">Draft</button>
+          <button class="tab" onclick="tTab('rank-t',this)">Classifica</button>
+        </div>
+        <div id="tContent"></div>
+      </div>
+
+      <!-- CLASSIFICA -->
+      <div class="scr" id="s-class">
+        <div class="tabs" id="clTabs">
+          <button class="tab active" onclick="clTab('gen',this)">Generale</button>
+          <button class="tab" onclick="clTab('albo',this)">Albo d'oro</button>
+        </div>
+        <div id="clContent"><div class="empty-state"><div class="spinner"></div></div></div>
+      </div>
+
+      <!-- PROFILO -->
+      <div class="scr" id="s-profilo">
+        <div class="phero">
+          <div class="pav" id="pAvatar" style="background:#D85A30">
+            <span id="pAvatarText">FR</span>
+            <div class="pav-edit" onclick="document.getElementById('pAvatarInp').click()" title="Cambia foto">✎</div>
+            <input type="file" id="pAvatarInp" accept="image/*" style="display:none" onchange="uploadAvatar(event)">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:17px;font-weight:500" id="profName">—</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:1px" id="profUser">—</div>
+            <div id="profBadge" style="margin-top:8px"></div>
+          </div>
+          <button class="btn btn-g" onclick="toast('Modifica profilo — prossimamente')">Modifica</button>
+        </div>
+        <div class="srow">
+          <div class="sbox"><div class="sv a" id="profPts">0</div><div class="sl">Punti</div></div>
+          <div class="sbox"><div class="sv" id="profPos">—</div><div class="sl">Posizione</div></div>
+          <div class="sbox"><div class="sv" id="profTornei">0</div><div class="sl">Tornei</div></div>
+          <div class="sbox"><div class="sv">0</div><div class="sl">Vittorie</div></div>
+        </div>
+        <div class="card" style="background:var(--dark2)">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Sessione attiva su questo dispositivo</div>
+          <button class="btn btn-g" onclick="doLogout()">Esci dall'app</button>
+        </div>
+      </div>
+
+      <!-- ADMIN -->
+      <div class="scr" id="s-admin">
+        <div class="tabs" id="admTabs">
+          <button class="tab active" onclick="admTab('utenti',this)">Utenti</button>
+          <button class="tab" onclick="admTab('tornei-adm',this)">Tornei</button>
+          <button class="tab" onclick="admTab('punti',this)">Punteggi</button>
+          <button class="tab" onclick="admTab('risultati',this)">Risultati</button>
+        </div>
+        <div id="admContent"><div class="empty-state"><div class="spinner"></div></div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div><!-- .app -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// SUPABASE
+// ============================================================
+const SUPA_URL = 'https://lsqcvpzuatfgjteeogwe.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzcWN2cHp1YXRmZ2p0ZWVvZ3dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MTcyNzAsImV4cCI6MjA5MzQ5MzI3MH0.d7bsnEGDOHskKo83oyRwZB-HoKvxfqsTficHQZD4bfc';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ============================================================
+// STATE
+// ============================================================
+const SESS_KEY = 'ft_sess_v1';
+let currentUser = null;
+let allUsers = [];
+let allTornei = [];
+let classifica = [];
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  // Carica utenti dal DB
+  const { data: utenti } = await supa.from('utenti').select('*').order('id');
+  if(utenti) allUsers = utenti;
+
+  // Carica tornei
+  const { data: tornei } = await supa.from('tornei').select('*').order('data_inizio', {ascending:false});
+  if(tornei) allTornei = tornei;
+
+  // Controlla sessione salvata
+  const sess = getSavedSession();
+  if(sess){
+    const u = allUsers.find(u => u.id === sess.id);
+    if(u){ currentUser = u; enterApp(); return; }
+  }
+  showLogin();
+});
+
+function getSavedSession(){
+  try { return JSON.parse(localStorage.getItem(SESS_KEY)); } catch(e){ return null; }
+}
+function saveSession(u){ try { localStorage.setItem(SESS_KEY, JSON.stringify({id:u.id})); } catch(e){} }
+function clearSession(){ try { localStorage.removeItem(SESS_KEY); } catch(e){} }
+
+function showLogin(){
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+// ============================================================
+// LOGIN
+// ============================================================
+async function doLogin(){
+  const u = document.getElementById('loginUser').value.trim().toLowerCase();
+  const p = document.getElementById('loginPwd').value;
+  const err = document.getElementById('loginErr');
+  const btn = document.getElementById('loginBtn');
+  err.classList.remove('on');
+  if(!u||!p){ err.classList.add('on'); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  const { data, error } = await supa.from('utenti')
+    .select('*').eq('username', u).eq('password_hash', p).single();
+
+  btn.disabled = false;
+  btn.textContent = 'Entra';
+
+  if(error || !data){ err.classList.add('on'); return; }
+
+  currentUser = data;
+  if(data.is_tmp_pwd){
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('changePwdScreen').style.display = 'flex';
+  } else {
+    saveSession(currentUser);
+    enterApp();
+  }
+}
+
+async function doChangePwd(){
+  const p1 = document.getElementById('newPwd1').value;
+  const p2 = document.getElementById('newPwd2').value;
+  const err = document.getElementById('cpwdErr');
+  err.classList.remove('on');
+  if(p1.length < 8 || p1 !== p2){ err.classList.add('on'); return; }
+
+  const { error } = await supa.from('utenti')
+    .update({ password_hash: p1, is_tmp_pwd: false })
+    .eq('id', currentUser.id);
+
+  if(error){ toast('Errore aggiornamento password'); return; }
+  currentUser.password_hash = p1;
+  currentUser.is_tmp_pwd = false;
+
+  // Aggiorna in allUsers
+  const idx = allUsers.findIndex(u=>u.id===currentUser.id);
+  if(idx>=0) allUsers[idx] = currentUser;
+
+  saveSession(currentUser);
+  document.getElementById('changePwdScreen').style.display = 'none';
+  enterApp();
+}
+
+async function doLogout(){
+  clearSession();
+  currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPwd').value = '';
+}
+
+// ============================================================
+// ENTER APP
+// ============================================================
+function enterApp(){
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('changePwdScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'flex';
+  // Admin icon
+  document.getElementById('ni-admin').style.display = currentUser.is_admin ? 'flex' : 'none';
+  updateNavUI();
+  go('home');
+}
+
+// ============================================================
+// NAV UI
+// ============================================================
+function avHTML(u, size=30){
+  const av = u.avatar_url;
+  return `<div class="rav" style="width:${size}px;height:${size}px;background:${u.color||'#D85A30'}">
+    ${av ? `<img src="${av}">` : (u.initials||'?')}
+  </div>`;
+}
+
+function updateNavUI(){
+  if(!currentUser) return;
+  const navAv = document.getElementById('navAv');
+  navAv.style.background = currentUser.color || '#D85A30';
+  navAv.innerHTML = currentUser.avatar_url ? `<img src="${currentUser.avatar_url}">` : (currentUser.initials||'?');
+  document.getElementById('navName').textContent = currentUser.nickname;
+  document.getElementById('profName').textContent = currentUser.nickname;
+  document.getElementById('profUser').textContent = '@' + currentUser.username;
+  document.getElementById('pAvatarText').textContent = currentUser.initials || '?';
+  document.getElementById('pAvatar').style.background = currentUser.color || '#D85A30';
+  if(currentUser.avatar_url){
+    document.getElementById('pAvatar').innerHTML = `<img src="${currentUser.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">
+      <div class="pav-edit" onclick="document.getElementById('pAvatarInp').click()">✎</div>
+      <input type="file" id="pAvatarInp" accept="image/*" style="display:none" onchange="uploadAvatar(event)">`;
+  }
+  document.getElementById('profBadge').innerHTML = currentUser.is_admin
+    ? `<span class="badge adm">👑 Admin</span>`
+    : `<span class="badge soon">🎾 Clay Kings</span>`;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function go(id){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+  const scr = document.getElementById('s-'+id);
+  if(scr) scr.classList.add('on');
+  const ni = document.getElementById('ni-'+id);
+  if(ni) ni.classList.add('active');
+  // Load content
+  if(id==='home') renderHome();
+  if(id==='tornei') renderTornei();
+  if(id==='class') renderClass('gen');
+  if(id==='profilo') renderProfilo();
+  if(id==='admin') renderAdm('utenti');
+  // scroll top
+  document.getElementById('mainContent').scrollTop = 0;
+}
+
+// ============================================================
+// HOME
+// ============================================================
+async function renderHome(){
+  // Carica classifica
+  const { data } = await supa.from('classifica').select('*, utenti(*)');
+  // Aggrega punti per utente
+  const ptsByUser = {};
+  if(data) data.forEach(r => {
+    if(!ptsByUser[r.utente_id]) ptsByUser[r.utente_id] = 0;
+    ptsByUser[r.utente_id] += r.punti || 0;
+  });
+
+  // Costruisci classifica
+  classifica = allUsers.map(u => ({
+    ...u,
+    totPts: ptsByUser[u.id] || 0,
+  })).sort((a,b) => b.totPts - a.totPts);
+
+  // Stats utente corrente
+  const myPos = classifica.findIndex(u=>u.id===currentUser.id) + 1;
+  const myPts = classifica.find(u=>u.id===currentUser.id)?.totPts || 0;
+  document.getElementById('homePts').textContent = myPts;
+  document.getElementById('homePos').textContent = myPos + '°';
+  document.getElementById('profPts').textContent = myPts;
+  document.getElementById('profPos').textContent = myPos + '°';
+  document.getElementById('profTornei').textContent = allTornei.filter(t=>t.stato==='completed').length;
+
+  document.getElementById('homeRank').innerHTML = classifica.map((u,i) => `
+    <div class="rr ${i===0?'r1':''}">
+      <div class="rpos ${i===0?'p1':''}">${i+1}</div>
+      ${avHTML(u)}
+      <div class="ri">
+        <div class="rname">${u.nickname}${u.is_admin?' <span style="font-size:9px;color:var(--clay)">👑</span>':''}</div>
+        <div class="rmeta">0 tornei</div>
+      </div>
+      <div class="rpts">${u.totPts}</div>
+    </div>`).join('');
+}
+
+// ============================================================
+// TORNEI
+// ============================================================
+function renderTornei(){
+  const upcoming = allTornei.filter(t => t.stato !== 'completed');
+  const completed = allTornei.filter(t => t.stato === 'completed');
+
+  let html = '';
+  if(upcoming.length){
+    html += `<div class="stitle">Prossimi / In corso</div>`;
+    html += upcoming.map(t => torneoCard(t)).join('');
+  }
+  if(completed.length){
+    html += `<div class="stitle" style="margin-top:12px">Completati</div>`;
+    html += completed.map(t => torneoCard(t)).join('');
+  }
+  if(!allTornei.length){
+    html = `<div class="empty-state"><div class="empty-icon">🎾</div>Nessun torneo ancora. ${currentUser.is_admin?'<br><br><button class="btn btn-p" onclick="go(\'admin\')">Aggiungi torneo →</button>':''}</div>`;
+  }
+  document.getElementById('torneiList').innerHTML = html;
+}
+
+function torneoCard(t){
+  const typeBadge = t.tipo === 'slam'
+    ? `<span class="badge slam">Slam</span>`
+    : `<span class="badge k1000">1000</span>`;
+  const statoBadge = t.stato === 'completed'
+    ? `<span class="badge done">Completato</span>`
+    : t.stato === 'live'
+    ? `<span class="badge" style="background:rgba(39,174,96,0.15);color:var(--green)">In corso</span>`
+    : `<span class="badge soon">Prossimo</span>`;
+  return `<div class="tc" onclick="openTorneo(${t.id})">
+    <div class="tch">
+      <div>
+        <div class="tn">${t.nome}</div>
+        <div class="tm">${t.tipo==='slam'?'Slam':'ATP 1000'} · ${t.location||''} · ${t.superficie||''} · ${formatDate(t.data_inizio)} – ${formatDate(t.data_fine)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">${typeBadge}${statoBadge}</div>
+    </div>
+  </div>`;
+}
+
+function formatDate(d){
+  if(!d) return '—';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('it-IT', {day:'numeric', month:'short'});
+}
+
+// ============================================================
+// TORNEO DETAIL
+// ============================================================
+let currentTorneoId = null;
+function openTorneo(id){
+  currentTorneoId = id;
+  const t = allTornei.find(t=>t.id===id);
+  go('torneo');
+  document.getElementById('tTitle').textContent = t?.nome || '—';
+  document.getElementById('tMeta').textContent = `${t?.tipo==='slam'?'Slam':'ATP 1000'} · ${t?.location||''} · ${t?.superficie||''}`;
+  document.querySelectorAll('#tTabs .tab').forEach((tab,i)=>tab.classList.toggle('active',i===0));
+  tTab('info', null);
+}
+
+// API Key Anthropic
+const ANTHROPIC_KEY = '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';
+
+// Tennisti caricati per torneo corrente
+let currentTennisti = [];
+
+async function tTab(tab, btn){
+  if(btn){ document.querySelectorAll('#tTabs .tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); }
+  const t = allTornei.find(t=>t.id===currentTorneoId);
+  const isAdmin = currentUser?.is_admin;
+
+  if(tab === 'tabellone'){
+    await renderTabellone(t, isAdmin);
+    return;
+  }
+
+  const tabs = {
+    info: `<div class="card">
+      <div style="font-size:13px;font-weight:500;margin-bottom:8px">Informazioni torneo</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <span class="badge ${t?.tipo==='slam'?'slam':'k1000'}">${t?.tipo==='slam'?'Slam':'ATP 1000'}</span>
+        <span class="badge soon">${t?.max_giocatori||6} giocatori a testa</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        <div><span style="color:var(--text2)">Location:</span> ${t?.location||'—'}</div>
+        <div><span style="color:var(--text2)">Superficie:</span> ${t?.superficie||'—'}</div>
+        <div><span style="color:var(--text2)">Inizio:</span> ${formatDate(t?.data_inizio)}</div>
+        <div><span style="color:var(--text2)">Fine:</span> ${formatDate(t?.data_fine)}</div>
+      </div>
+    </div>
+    ${isAdmin ? `<button class="btn btn-p" onclick="go('admin')">⚙ Gestisci da admin</button>` : ''}`,
+    draft: null,
+    'rank-t': `<div class="empty-state"><div class="empty-icon">📊</div>Nessun risultato ancora disponibile.</div>`,
+  };
+  if(tab === 'draft'){
+    await renderDraft(t, isAdmin);
+  } else {
+    document.getElementById('tContent').innerHTML = tabs[tab] || '';
+  }
+}
+
+// ============================================================
+// DRAFT
+// ============================================================
+let draftTimerInterval = null;
+
+async function renderDraft(t, isAdmin){
+  const wrap = document.getElementById('tContent');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+
+  // Carica dati torneo aggiornati
+  const { data: torneo } = await supa.from('tornei').select('*').eq('id', currentTorneoId).single();
+  if(!torneo){ wrap.innerHTML = '<div class="empty-state">Errore caricamento torneo.</div>'; return; }
+
+  // Carica tennisti selezionabili (no bye)
+  const { data: tennisti } = await supa.from('tennisti')
+    .select('*').eq('torneo_id', currentTorneoId)
+    .not('tipo','eq','bye').order('slot');
+
+  // Carica squadre già assegnate
+  const { data: squadre } = await supa.from('squadre')
+    .select('*, utenti(*), tennisti(*)').eq('torneo_id', currentTorneoId).order('ordine_draft');
+
+  // Carica preferenze utente corrente
+  const { data: prefs } = await supa.from('draft_preferenze')
+    .select('*, tennisti(*)').eq('torneo_id', currentTorneoId)
+    .eq('utente_id', currentUser.id).order('ordine');
+
+  const stato = torneo.stato;
+  const draftOrdine = torneo.draft_ordine || [];
+  const pickCorrente = torneo.draft_pick_corrente || 0;
+  const maxGiocatori = torneo.max_giocatori || 6;
+
+  // Giocatori già assegnati
+  const assegnati = new Set((squadre||[]).map(s => s.tennista_id));
+
+  // Mia squadra
+  const miaSq = (squadre||[]).filter(s => s.utente_id === currentUser.id);
+
+  // Chi è di turno ora
+  const utenteCorrente = draftOrdine[pickCorrente];
+  const isMioTurno = utenteCorrente === currentUser.id;
+
+  if(stato === 'upcoming'){
+    // Draft non avviato
+    wrap.innerHTML = `
+      <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:10px;padding:20px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:500;margin-bottom:4px">⏳ Draft non ancora avviato</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Prepara la tua lista di preferenze. L'admin avvierà il draft quando tutti sono pronti.</div>
+        ${isAdmin ? `<button class="btn btn-p" onclick="avviaDraft(${currentTorneoId})">▶ Avvia draft ora</button>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <div class="stitle">La mia lista preferenze</div>
+          <div id="prefList" style="margin-bottom:10px">${renderPrefList(prefs||[], assegnati)}</div>
+          <button class="btn btn-g" style="font-size:10px;width:100%" onclick="salvaPref(${currentTorneoId})">💾 Salva lista</button>
+        </div>
+        <div>
+          <div class="stitle">Giocatori disponibili</div>
+          <input class="linput" id="searchGiocatori" placeholder="Cerca..." oninput="filterGiocatori()" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
+          <div id="giocatoriList" style="max-height:400px;overflow-y:auto">${renderGiocatoriList(tennisti||[], prefs||[], assegnati)}</div>
+        </div>
+      </div>`;
+    window._tennisti = tennisti||[];
+    window._prefs = prefs||[];
+    window._assegnati = assegnati;
+
+  } else if(stato === 'draft'){
+    // Draft in corso
+    const giro = Math.floor(pickCorrente / allUsers.length) + 1;
+    const posInGiro = pickCorrente % allUsers.length;
+
+    wrap.innerHTML = `
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:12px">
+        <!-- SINISTRA: squadra + turno -->
+        <div>
+          <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:6px">DRAFT IN CORSO — Giro ${giro}</div>
+            <div style="font-size:12px;margin-bottom:8px">Turno di: <strong style="color:${isMioTurno?'var(--clay)':'var(--text)'}">${isMioTurno?'TUO TURNO!': allUsers.find(u=>u.id===utenteCorrente)?.nickname||'—'}</strong></div>
+            ${isMioTurno ? `<div id="timerBox" style="font-size:11px;color:var(--yellow)">⏱ Timer: 30:00</div>` : ''}
+          </div>
+
+          <div class="stitle">La mia squadra (${miaSq.length}/${maxGiocatori})</div>
+          <div style="margin-bottom:10px">
+            ${miaSq.length > 0
+              ? miaSq.map(s=>`<div class="rr" style="margin-bottom:3px;padding:6px 10px">
+                  <div style="font-size:11px;flex:1">${s.tennisti?.flag||''} ${s.tennisti?.nome||'—'}</div>
+                  ${s.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 4px">${s.tennisti.seed}</span>`:''}
+                </div>`).join('')
+              : '<div style="font-size:11px;color:var(--text2);padding:8px 0">Nessun giocatore ancora</div>'
+            }
+            ${Array(Math.max(0, maxGiocatori - miaSq.length)).fill(0).map((_,i)=>`
+              <div style="border:0.5px dashed var(--border2);border-radius:6px;padding:6px 10px;margin-bottom:3px;font-size:11px;color:var(--text2)">slot ${miaSq.length+i+1}</div>
+            `).join('')}
+          </div>
+
+          <div class="stitle">Ordine snake</div>
+          <div style="font-size:11px">
+            ${draftOrdine.slice(0, Math.min(pickCorrente+8, draftOrdine.length)).map((uid, idx) => {
+              const u = allUsers.find(u=>u.id===uid);
+              const isCurrent = idx === pickCorrente;
+              const isDone = idx < pickCorrente;
+              return `<div style="padding:4px 8px;border-radius:4px;margin-bottom:2px;${isCurrent?'background:var(--clay-light);color:var(--clay);font-weight:500':isDone?'opacity:0.4':''}">
+                ${isDone?'✓ ':isCurrent?'▶ ':''}${u?.nickname||'—'} <span style="color:var(--text2);font-weight:400">pick ${idx+1}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- DESTRA: selezione giocatore -->
+        <div>
+          ${isMioTurno && miaSq.length < maxGiocatori ? `
+          <div style="background:rgba(216,90,48,0.08);border:0.5px solid rgba(216,90,48,0.3);border-radius:8px;padding:12px;margin-bottom:10px">
+            <div style="font-size:12px;font-weight:500;color:var(--clay);margin-bottom:8px">🎾 È il tuo turno! Scegli un giocatore</div>
+            <input class="linput" id="searchGiocatori" placeholder="Cerca giocatore..." oninput="filterGiocatori()" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
+            <div id="giocatoriList" style="max-height:350px;overflow-y:auto">${renderGiocatoriListDraft(tennisti||[], assegnati, currentTorneoId)}</div>
+          </div>` : `
+          <div>
+            <div class="stitle">Giocatori già scelti</div>
+            ${(squadre||[]).map(s=>`<div class="rr" style="margin-bottom:3px;padding:6px 10px">
+              <div class="rav" style="width:22px;height:22px;background:${allUsers.find(u=>u.id===s.utente_id)?.color||'#D85A30'};font-size:8px">${allUsers.find(u=>u.id===s.utente_id)?.initials||'?'}</div>
+              <div style="font-size:11px;flex:1">${s.tennisti?.flag||''} ${s.tennisti?.nome||'—'}</div>
+              ${s.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 4px">${s.tennisti.seed}</span>`:''}
+            </div>`).join('')}
+          </div>`}
+        </div>
+      </div>`;
+
+    // Avvia timer se è il mio turno
+    if(isMioTurno && torneo.draft_timer_start){
+      avviaTimer(new Date(torneo.draft_timer_start));
+    }
+
+  } else if(stato === 'completed'){
+    wrap.innerHTML = `
+      <div style="font-size:13px;font-weight:500;margin-bottom:14px">✅ Draft completato</div>
+      ${allUsers.map(u => {
+        const sq = (squadre||[]).filter(s=>s.utente_id===u.id);
+        return `<div class="card" style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div class="rav" style="background:${u.color}">${u.initials}</div>
+            <div style="font-size:13px;font-weight:500">${u.nickname}</div>
+            <div style="font-size:11px;color:var(--text2);margin-left:auto">${sq.length} giocatori</div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">
+            ${sq.map(s=>`<span style="font-size:11px;background:var(--card2);border:0.5px solid var(--border);border-radius:4px;padding:3px 8px">${s.tennisti?.flag||''} ${s.tennisti?.nome||'—'} ${s.tennisti?.seed?'('+s.tennisti.seed+')':''}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}`;
+  }
+
+  // Poll aggiornamenti ogni 10 secondi se draft in corso
+  if(stato === 'draft'){
+    setTimeout(()=>{ if(document.getElementById('tContent')) renderDraft(t, isAdmin); }, 10000);
+  }
+}
+
+let _dragSrcIdx = null;
+
+function renderPrefList(prefs, assegnati){
+  if(!prefs.length) return '<div style="font-size:11px;color:var(--text2);padding:8px 0">Aggiungi giocatori dalla lista →</div>';
+  return prefs.map((p,i) => {
+    const taken = assegnati.has(p.tennista_id);
+    return `<div 
+      draggable="${!taken}"
+      data-idx="${i}"
+      ondragstart="dragStart(event,${i})"
+      ondragover="dragOver(event)"
+      ondrop="dragDrop(event,${i})"
+      ondragend="dragEnd(event)"
+      style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:5px;margin-bottom:3px;${taken?'opacity:0.4':'cursor:grab'}">
+      <span style="font-size:13px;color:var(--text2);cursor:grab;flex-shrink:0" title="Trascina per riordinare">⠿</span>
+      <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
+      <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
+      ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
+      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px;padding:0 2px">✕</button>`}
+    </div>`;
+  }).join('');
+}
+
+function dragStart(e, idx){
+  _dragSrcIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.style.opacity = '0.4';
+}
+
+function dragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.style.borderColor = 'var(--clay)';
+}
+
+function dragEnd(e){
+  e.currentTarget.style.opacity = '';
+  e.currentTarget.style.borderColor = 'var(--border)';
+  // Reset all borders
+  document.querySelectorAll('#prefList > div').forEach(el => el.style.borderColor = 'var(--border)');
+}
+
+function dragDrop(e, targetIdx){
+  e.preventDefault();
+  if(_dragSrcIdx === null || _dragSrcIdx === targetIdx) return;
+  // Riordina array
+  const prefs = window._prefs || [];
+  const moved = prefs.splice(_dragSrcIdx, 1)[0];
+  prefs.splice(targetIdx, 0, moved);
+  prefs.forEach((p,i) => p.ordine = i+1);
+  window._prefs = prefs;
+  _dragSrcIdx = null;
+  // Refresh
+  document.getElementById('prefList').innerHTML = renderPrefList(prefs, window._assegnati||new Set());
+}
+
+function renderGiocatoriList(tennisti, prefs, assegnati){
+  const prefIds = new Set(prefs.map(p=>p.tennista_id));
+  return tennisti.filter(t=>t.tipo!=='bye').map(t => {
+    const inPrefs = prefIds.has(t.id);
+    const taken = assegnati.has(t.id);
+    return `<div onclick="${!inPrefs&&!taken?`aggiungiPref(${t.id})`:'null'}"
+      style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;margin-bottom:2px;cursor:${!inPrefs&&!taken?'pointer':'default'};${inPrefs?'background:var(--clay-light)':taken?'opacity:0.35':''}:hover{background:var(--card2)}">
+      <span style="font-size:11px;flex:1">${t.flag||''} ${t.nome}</span>
+      ${t.seed?`<span style="font-size:9px;background:${t.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 3px">${t.seed}</span>`:''}
+      ${inPrefs?'<span style="font-size:9px;color:var(--clay)">✓</span>':taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':'<span style="font-size:9px;color:var(--text2)">+</span>'}
+    </div>`;
+  }).join('');
+}
+
+function renderGiocatoriListDraft(tennisti, assegnati, torneoId){
+  return tennisti.filter(t=>t.tipo!=='bye'&&!assegnati.has(t.id)).map(t =>
+    `<div onclick="scegli(${t.id},${torneoId})"
+      style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:5px;margin-bottom:2px;cursor:pointer;background:var(--card);border:0.5px solid var(--border)"
+      onmouseover="this.style.borderColor='var(--clay)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:12px;flex:1">${t.flag||''} ${t.nome}</span>
+      ${t.seed?`<span style="font-size:9px;background:${t.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 3px">${t.seed}</span>`:''}
+    </div>`
+  ).join('');
+}
+
+function filterGiocatori(){
+  const q = document.getElementById('searchGiocatori')?.value.toLowerCase()||'';
+  const items = document.querySelectorAll('#giocatoriList > div');
+  items.forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function aggiungiPref(tennista_id){
+  const t = window._tennisti?.find(t=>t.id===tennista_id);
+  if(!t) return;
+  // Aggiungi alla lista locale
+  const ordine = (window._prefs?.length||0) + 1;
+  window._prefs = window._prefs || [];
+  window._prefs.push({tennista_id, ordine, tennisti: t});
+  // Refresh UI
+  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+}
+
+async function rimuoviPref(tennista_id){
+  window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
+  window._prefs.forEach((p,i)=>p.ordine=i+1);
+  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+}
+
+async function salvaPref(torneoId){
+  const prefs = window._prefs||[];
+  // Elimina vecchie prefs
+  await supa.from('draft_preferenze').delete().eq('torneo_id', torneoId).eq('utente_id', currentUser.id);
+  if(prefs.length){
+    const rows = prefs.map((p,i)=>({utente_id:currentUser.id, torneo_id:torneoId, tennista_id:p.tennista_id, ordine:i+1}));
+    const {error} = await supa.from('draft_preferenze').insert(rows);
+    if(error){ toast('Errore salvataggio: '+error.message); return; }
+  }
+  toast('Lista salvata ✓');
+}
+
+async function avviaDraft(torneoId){
+  // Ordine snake: inverso classifica (tutti a 0 → ordine random)
+  const ordineBase = [...allUsers].sort(()=>Math.random()-0.5).map(u=>u.id);
+  const maxGiocatori = allTornei.find(t=>t.id===torneoId)?.max_giocatori||6;
+  // Genera ordine snake completo
+  const snakeOrdine = [];
+  for(let g=0; g<maxGiocatori; g++){
+    if(g%2===0) snakeOrdine.push(...ordineBase);
+    else snakeOrdine.push(...[...ordineBase].reverse());
+  }
+  const {error} = await supa.from('tornei').update({
+    stato: 'draft',
+    draft_ordine: snakeOrdine,
+    draft_pick_corrente: 0,
+    draft_timer_start: new Date().toISOString(),
+  }).eq('id', torneoId);
+  if(error){ toast('Errore avvio draft: '+error.message); return; }
+  // Aggiorna allTornei locale
+  const idx = allTornei.findIndex(t=>t.id===torneoId);
+  if(idx>=0) allTornei[idx].stato='draft';
+  toast('Draft avviato!');
+  const t = allTornei.find(t=>t.id===torneoId);
+  renderDraft(t, true);
+}
+
+async function scegli(tennista_id, torneoId){
+  // Carica torneo aggiornato
+  const {data:torneo} = await supa.from('tornei').select('*').eq('id',torneoId).single();
+  const pickCorrente = torneo.draft_pick_corrente||0;
+  const draftOrdine = torneo.draft_ordine||[];
+
+  if(draftOrdine[pickCorrente] !== currentUser.id){ toast('Non è il tuo turno!'); return; }
+
+  // Inserisci in squadre
+  const {error} = await supa.from('squadre').insert({
+    utente_id: currentUser.id, torneo_id: torneoId,
+    tennista_id, ordine_draft: pickCorrente+1,
+  });
+  if(error){ toast('Errore: '+error.message); return; }
+
+  // Avanza pick
+  const nuovoPick = pickCorrente+1;
+  const maxGiocatori = torneo.max_giocatori||6;
+  const nuovoStato = nuovoPick >= draftOrdine.length ? 'completed' : 'draft';
+  await supa.from('tornei').update({
+    draft_pick_corrente: nuovoPick,
+    draft_timer_start: new Date().toISOString(),
+    stato: nuovoStato,
+  }).eq('id', torneoId);
+
+  if(nuovoStato==='completed'){
+    const idx=allTornei.findIndex(t=>t.id===torneoId);
+    if(idx>=0) allTornei[idx].stato='completed';
+  }
+  toast('Giocatore scelto!');
+  const t = allTornei.find(t=>t.id===torneoId);
+  renderDraft(t, currentUser.is_admin);
+}
+
+function avviaTimer(startTime){
+  if(draftTimerInterval) clearInterval(draftTimerInterval);
+  const durationMs = 30 * 60 * 1000; // 30 minuti
+  draftTimerInterval = setInterval(()=>{
+    const elapsed = Date.now() - startTime.getTime();
+    const remaining = Math.max(0, durationMs - elapsed);
+    const mins = Math.floor(remaining/60000);
+    const secs = Math.floor((remaining%60000)/1000);
+    const timerBox = document.getElementById('timerBox');
+    if(timerBox) timerBox.textContent = `⏱ Timer: ${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    if(remaining === 0){
+      clearInterval(draftTimerInterval);
+      // Auto-assegna TdS libera col seed più alto
+      autoAssegna();
+    }
+  }, 1000);
+}
+
+async function autoAssegna(){
+  const {data:torneo} = await supa.from('tornei').select('*').eq('id',currentTorneoId).single();
+  const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id',currentTorneoId);
+  const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
+  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id',currentTorneoId).not('tipo','eq','bye').order('seed',{nullsFirst:false});
+  // Prima le TdS libere (seed non null), poi gli altri per slot
+  const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id));
+  const target = liberi.find(t=>t.seed) || liberi[0];
+  if(target) await scegli(target.id, currentTorneoId);
+}
+
+// ============================================================
+// TABELLONE — Upload + Claude + Bracket
+// ============================================================
+async function renderTabellone(t, isAdmin){
+  const wrap = document.getElementById('tContent');
+
+  // Carica tennisti esistenti dal DB
+  const { data: tennisti } = await supa.from('tennisti')
+    .select('*').eq('torneo_id', currentTorneoId).order('slot');
+  currentTennisti = tennisti || [];
+
+  if(currentTennisti.length > 0){
+    // Mostra bracket
+    wrap.innerHTML = buildBracketHTML(currentTennisti, isAdmin, t);
+    renderBracketSVG(currentTennisti);
+  } else {
+    // Nessun tabellone
+    wrap.innerHTML = `
+      <div style="text-align:center;padding:30px 20px;color:var(--text2)">
+        <div style="font-size:32px;margin-bottom:10px">🎾</div>
+        <div style="font-size:13px;margin-bottom:4px">Nessun tabellone caricato</div>
+        <div style="font-size:11px;margin-bottom:20px">Carica uno screenshot del tabellone da diretta.it, SuperTennis o qualsiasi fonte</div>
+        ${isAdmin ? `
+        <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:10px;padding:20px;max-width:400px;margin:0 auto">
+          <div style="font-size:12px;font-weight:500;margin-bottom:12px">📸 Carica screenshot tabellone</div>
+          <div id="uploadArea" onclick="document.getElementById('tabScreenshot').click()"
+            style="border:1.5px dashed var(--border2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.15s;margin-bottom:12px"
+            onmouseover="this.style.borderColor='var(--clay)'" onmouseout="this.style.borderColor='var(--border2)'">
+            <div style="font-size:24px;margin-bottom:6px">📷</div>
+            <div style="font-size:12px;color:var(--text2)">Clicca per caricare</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">JPG, PNG — diretta.it, SuperTennis, foto TV...</div>
+            <input type="file" id="tabScreenshot" accept="image/*" style="display:none" onchange="processTabellone(event)">
+          </div>
+          <div id="uploadStatus" style="display:none"></div>
+        </div>` : '<div style="font-size:12px">Attendi che l\'admin carichi il tabellone.</div>'}
+      </div>`;
+  }
+}
+
+async function processTabellone(e){
+  const file = e.target.files[0]; if(!file) return;
+  const status = document.getElementById('uploadStatus');
+  const area = document.getElementById('uploadArea');
+
+  // Mostra preview
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    const base64 = ev.target.result.split(',')[1];
+    const mediaType = file.type;
+
+    area.innerHTML = `<img src="${ev.target.result}" style="max-height:150px;border-radius:6px;object-fit:contain">`;
+    status.style.display = 'block';
+    status.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);margin-bottom:8px"><span class="spinner"></span> Claude sta leggendo il tabellone...</div>`;
+
+    try {
+      // Chiama Claude API con l'immagine
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-client-side-api-key-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-opus-4-5',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mediaType, data: base64 }
+              },
+              {
+                type: 'text',
+                text: `Analizza questo tabellone di tennis e restituisci SOLO un JSON valido, senza testo aggiuntivo, senza markdown, senza backtick.
+
+Il JSON deve essere un array di oggetti con questa struttura:
+[
+  {"slot": 1, "nome": "Sinner J.", "flag": "🇮🇹", "seed": 1, "tipo": "s", "quarter": 1},
+  {"slot": 2, "nome": null, "flag": null, "seed": null, "tipo": "bye", "quarter": 1},
+  ...
+]
+
+Regole:
+- "slot": numero progressivo da 1 in poi (ogni riga del tabellone)
+- "nome": cognome e iniziale nome (es. "Sinner J."), null se vuoto
+- "flag": emoji bandiera del paese, null se non disponibile
+- "seed": numero testa di serie, null se non è testa di serie
+- "tipo": "s" se è testa di serie con seed, "p" se giocatore normale, "q" se qualifier/Q, "bye" se slot vuoto/bye
+- "quarter": 1, 2, 3 o 4 in base al quarto di tabellone
+
+Includi TUTTI gli slot inclusi i bye e i qualifier. Restituisci SOLO il JSON array.`
+              }
+            ]
+          }]
+        })
+      });
+
+      const data = await response.json();
+      if(!response.ok) throw new Error(data.error?.message || 'Errore API');
+
+      const raw = data.content[0].text.trim();
+      let players;
+      try {
+        players = JSON.parse(raw);
+      } catch(pe) {
+        // Prova a estrarre il JSON se c'è testo extra
+        const match = raw.match(/\[[\s\S]*\]/);
+        if(match) players = JSON.parse(match[0]);
+        else throw new Error('Risposta non parsabile');
+      }
+
+      status.innerHTML = `<div style="font-size:12px;color:var(--green);margin-bottom:8px">✓ Estratti ${players.filter(p=>p.tipo!=='bye').length} giocatori</div>`;
+
+      // Mostra anteprima per conferma
+      const nonBye = players.filter(p=>p.tipo!=='bye'&&p.nome);
+      status.innerHTML += `
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">${nonBye.length} giocatori trovati · ${players.filter(p=>p.tipo==='q').length} qualifier · ${players.filter(p=>p.tipo==='s').length} teste di serie</div>
+        <div style="max-height:150px;overflow-y:auto;background:var(--dark3);border-radius:6px;padding:8px;margin-bottom:12px;font-size:11px">
+          ${nonBye.slice(0,10).map(p=>`<div style="padding:2px 0;color:var(--text2)">${p.flag||''} ${p.nome||'Q'} ${p.seed?'('+p.seed+')':''}</div>`).join('')}
+          ${nonBye.length>10?`<div style="color:var(--text2);margin-top:4px">...e altri ${nonBye.length-10}</div>`:''}
+        </div>
+        <button class="btn btn-p" onclick="saveTabellone(${JSON.stringify(players).replace(/"/g,'&quot;')})">Salva tabellone</button>
+        <button class="btn btn-g" style="margin-left:8px" onclick="document.getElementById('tabScreenshot').click()">Ricarica</button>
+      `;
+
+    } catch(err) {
+      status.innerHTML = `<div style="font-size:12px;color:var(--red)">Errore: ${err.message}<br><button class="btn btn-g" style="margin-top:8px" onclick="document.getElementById('tabScreenshot').click()">Riprova</button></div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveTabellone(players){
+  const status = document.getElementById('uploadStatus');
+  status.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)"><span class="spinner"></span> Salvataggio in corso...</div>`;
+
+  // Elimina eventuali tennisti precedenti
+  await supa.from('tennisti').delete().eq('torneo_id', currentTorneoId);
+
+  // Inserisci tutti i giocatori
+  const rows = players.map(p => ({
+    torneo_id: currentTorneoId,
+    nome: p.nome || 'Qualifier',
+    flag: p.flag,
+    seed: p.seed,
+    slot: p.slot,
+    quarter: p.quarter,
+    tipo: p.tipo,
+  }));
+
+  const { error } = await supa.from('tennisti').insert(rows);
+  if(error){ status.innerHTML = `<div style="color:var(--red);font-size:12px">Errore salvataggio: ${error.message}</div>`; return; }
+
+  toast('Tabellone salvato ✓');
+  // Ricarica
+  const t = allTornei.find(t=>t.id===currentTorneoId);
+  await renderTabellone(t, true);
+}
+
+function buildBracketHTML(tennisti, isAdmin, t){
+  const bySlot = {};
+  tennisti.forEach(p => bySlot[p.slot] = p);
+  const maxSlot = Math.max(...tennisti.map(p=>p.slot));
+
+  // Header
+  let html = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text2)">${tennisti.filter(p=>p.tipo!=='bye').length} giocatori · ${tennisti.filter(p=>p.tipo==='s').length} TdS · ${tennisti.filter(p=>p.tipo==='q').length} Qualifier</div>
+      ${isAdmin?`<button class="btn btn-g" onclick="document.getElementById('tabReplace').click()" style="font-size:10px">↺ Sostituisci
+        <input type="file" id="tabReplace" accept="image/*" style="display:none" onchange="processTabellone(event)">
+      </button>`:''}
+    </div>
+    <div style="overflow-x:auto">
+    <div style="min-width:600px">
+    <div style="display:flex;gap:0;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;padding:0 2px">
+      <div style="width:180px">1° turno</div>
+      <div style="width:180px;margin-left:10px">2° turno</div>
+    </div>`;
+
+  // Bracket SVG container
+  html += `<div id="bracketContainer" style="position:relative"></div>`;
+  html += `</div></div>`;
+  return html;
+}
+
+function renderBracketSVG(tennisti){
+  const container = document.getElementById('bracketContainer');
+  if(!container) return;
+
+  const MW = 170, CONN = 10, ROW_H = 22, MATCH_H = ROW_H * 2, MB = 4;
+  const slotStep = (MATCH_H + MB) / 2;
+
+  // Slot array
+  const bySlot = {};
+  tennisti.forEach(p => bySlot[p.slot] = p);
+  const maxSlot = Math.max(...tennisti.map(p=>p.slot));
+  const slots0 = [];
+  for(let i=1; i<=maxSlot; i++) slots0.push(bySlot[i] || {slot:i, nome:'—', tipo:'bye', seed:null, flag:null});
+
+  // Calcola R2
+  function winner(top, bot){
+    if(!top || top.tipo==='bye') return bot;
+    if(!bot || bot.tipo==='bye') return top;
+    return null; // TBD
+  }
+  const slots1 = [];
+  for(let i=0; i<slots0.length; i+=4){
+    slots1.push(winner(slots0[i], slots0[i+1]));
+    slots1.push(winner(slots0[i+2], slots0[i+3]));
+  }
+
+  const totalH = slots0.length * slotStep + 20;
+  const totalW = (MW + CONN) * 2 + 20;
+
+  let html = `<div style="position:relative;width:${totalW}px;height:${totalH}px">`;
+
+  // Render R1
+  const mc0 = slots0.length / 2;
+  for(let mi=0; mi<mc0; mi++){
+    const top = slots0[mi*2];
+    const bot = slots0[mi*2+1];
+    const cA = (mi*2 + 0.5) * slotStep;
+    const cB = (mi*2 + 1.5) * slotStep;
+    const midY = (cA+cB)/2;
+    const matchTop = Math.round(midY - MATCH_H/2);
+
+    html += `<div style="position:absolute;left:0;top:${matchTop}px;width:${MW}px;border:0.5px solid var(--border);border-radius:4px;background:var(--card);overflow:hidden">
+      ${playerRowHTML(top)}${playerRowHTML(bot)}
+    </div>`;
+  }
+
+  // Render R2
+  // Ogni match R2 (indice mi) copre 4 slot R1: (mi*4, mi*4+1, mi*4+2, mi*4+3)
+  // Il centro Y del match R2 = media dei centri dei 2 match R1 che lo producono
+  const mc1 = slots1.length / 2;
+  for(let mi=0; mi<mc1; mi++){
+    // Centri dei 4 slot R1 coinvolti
+    const c0 = (mi*4 + 0.5) * slotStep;
+    const c1 = (mi*4 + 1.5) * slotStep;
+    const c2 = (mi*4 + 2.5) * slotStep;
+    const c3 = (mi*4 + 3.5) * slotStep;
+    // Centro dei due match R1
+    const centerM0 = (c0 + c1) / 2;
+    const centerM1 = (c2 + c3) / 2;
+    // Centro del match R2
+    const midY = (centerM0 + centerM1) / 2;
+    const matchTop = Math.round(midY - MATCH_H/2);
+    const p1 = slots1[mi*2];
+    const p2 = slots1[mi*2+1];
+
+    html += `<div style="position:absolute;left:${MW+CONN}px;top:${matchTop}px;width:${MW}px;border:0.5px solid var(--border);border-radius:4px;background:var(--card);overflow:hidden">
+      ${playerRowHTML(p1)}${playerRowHTML(p2)}
+    </div>`;
+  }
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function playerRowHTML(p){
+  if(!p) return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);color:var(--text2)"><span>—</span></div>`;
+  const isBye = p.tipo==='bye';
+  const isQ = p.tipo==='q';
+  const bg = isBye ? 'background:var(--dark3)' : '';
+  const col = isBye||isQ ? 'color:var(--text2)' : 'color:var(--text)';
+  const seedHTML = p.seed ? `<span style="font-size:8px;color:#fff;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : '';
+  const flagHTML = p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : '';
+  const name = isBye ? '(Bye)' : isQ ? 'Qualifier' : (p.nome||'—');
+  return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${bg};${col}">
+    ${flagHTML}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>${seedHTML}
+  </div>`;
+}
+
+// ============================================================
+// CLASSIFICA
+// ============================================================
+async function renderClass(tab){
+  if(tab === 'gen'){
+    if(!classifica.length){
+      const { data } = await supa.from('classifica').select('*, utenti(*)');
+      const ptsByUser = {};
+      if(data) data.forEach(r => { if(!ptsByUser[r.utente_id]) ptsByUser[r.utente_id]=0; ptsByUser[r.utente_id]+=r.punti||0; });
+      classifica = allUsers.map(u=>({...u, totPts:ptsByUser[u.id]||0})).sort((a,b)=>b.totPts-a.totPts);
+    }
+    document.getElementById('clContent').innerHTML = `
+      <div style="background:rgba(243,156,18,0.07);border:0.5px solid rgba(243,156,18,0.2);border-radius:7px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:var(--yellow)">
+        🎾 Prima stagione — la classifica si aggiornerà dopo il primo torneo.
+      </div>`
+      + classifica.map((u,i) => `
+        <div class="rr ${i===0?'r1':''}">
+          <div class="rpos ${i===0?'p1':''}">${i+1}</div>
+          ${avHTML(u)}
+          <div class="ri">
+            <div class="rname">${u.nickname}${u.is_admin?' <span style="font-size:9px;color:var(--clay)">👑</span>':''}</div>
+            <div class="rmeta">0 tornei</div>
+          </div>
+          <div class="rpts">${u.totPts}</div>
+        </div>`).join('');
+  } else {
+    document.getElementById('clContent').innerHTML = `<div class="empty-state"><div class="empty-icon">🏆</div>L'albo d'oro si aggiornerà dopo il primo torneo completato.</div>`;
+  }
+}
+
+function clTab(tab, btn){
+  document.querySelectorAll('#clTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderClass(tab);
+}
+
+// ============================================================
+// PROFILO
+// ============================================================
+function renderProfilo(){
+  updateNavUI();
+}
+
+// ============================================================
+// AVATAR UPLOAD
+// ============================================================
+async function uploadAvatar(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(file.size > 2*1024*1024){ toast('Immagine troppo grande (max 2MB)'); return; }
+
+  toast('Caricamento in corso...');
+  const ext = file.name.split('.').pop();
+  const path = `avatars/${currentUser.id}_${Date.now()}.${ext}`;
+
+  // Upload su Supabase Storage
+  const { error: upErr } = await supa.storage.from('avatars').upload(path, file, {upsert:true});
+  if(upErr){ toast('Errore upload: ' + upErr.message); return; }
+
+  const { data: urlData } = supa.storage.from('avatars').getPublicUrl(path);
+  const url = urlData.publicUrl;
+
+  // Aggiorna DB
+  await supa.from('utenti').update({ avatar_url: url }).eq('id', currentUser.id);
+  currentUser.avatar_url = url;
+  const idx = allUsers.findIndex(u=>u.id===currentUser.id);
+  if(idx>=0) allUsers[idx].avatar_url = url;
+
+  updateNavUI();
+  renderHome();
+  toast('Foto profilo aggiornata ✓');
+}
+
+// ============================================================
+// ADMIN
+// ============================================================
+function renderAdm(tab){
+  const wrap = document.getElementById('admContent');
+  if(tab==='utenti'){
+    wrap.innerHTML = `
+      <div class="hrow">
+        <div class="stitle" style="margin:0">Utenti (${allUsers.length})</div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="atable">
+          <thead><tr><th>Utente</th><th>Username</th><th>Stato</th><th>Foto</th><th>Azioni</th></tr></thead>
+          <tbody>
+            ${allUsers.map((u,ui) => `<tr>
+              <td style="display:flex;align-items:center;gap:8px">
+                <div style="width:26px;height:26px;border-radius:50%;background:${u.color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;overflow:hidden;flex-shrink:0">
+                  ${u.avatar_url?`<img src="${u.avatar_url}" style="width:100%;height:100%;object-fit:cover">`:`<span>${u.initials}</span>`}
+                </div>
+                <span>${u.nickname}${u.is_admin?' 👑':''}</span>
+              </td>
+              <td style="color:var(--text2)">@${u.username}</td>
+              <td>
+                <span class="sbadge ${u.is_admin?'adm':'ok'}">${u.is_admin?'Admin':'Attivo'}</span>
+                ${u.is_tmp_pwd?'<span class="sbadge pend" style="margin-left:3px">Temp pwd</span>':''}
+              </td>
+              <td>${u.avatar_url?'<span style="color:var(--green);font-size:11px">✓ Caricata</span>':'<span style="color:var(--text2);font-size:11px">—</span>'}</td>
+              <td style="display:flex;gap:4px">
+                <button class="btn btn-g" onclick="resetPwd(${u.id},'${u.nickname}')" style="font-size:10px">↺ Reset pwd</button>
+                ${!u.is_admin?`<button class="btn btn-d" style="font-size:10px" onclick="toast('Elimina utente — conferma richiesta')">✕</button>`:''}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else if(tab==='tornei-adm'){
+    wrap.innerHTML = `
+      <div class="hrow">
+        <div class="stitle" style="margin:0">Tornei (${allTornei.length})</div>
+        <button class="btn btn-p" onclick="showAddTorneo()">+ Aggiungi torneo</button>
+      </div>
+      ${allTornei.length ? allTornei.map(t=>`
+        <div class="rr">
+          <div class="ri">
+            <div class="rname">${t.nome}</div>
+            <div class="rmeta">${t.tipo==='slam'?'Slam':'ATP 1000'} · ${t.stato}</div>
+          </div>
+          <span class="badge ${t.tipo==='slam'?'slam':'k1000'}">${t.tipo==='slam'?'Slam':'1000'}</span>
+        </div>`).join('')
+      : `<div class="empty-state"><div class="empty-icon">🎾</div>Nessun torneo. Aggiungine uno!</div>`}
+      <div id="addTorneoForm" style="display:none;margin-top:14px">
+        <div class="card">
+          <div style="font-size:13px;font-weight:500;margin-bottom:12px">Nuovo torneo</div>
+          <div class="lfield"><label class="llabel">Nome</label><input class="linput" id="tNome" placeholder="es. Roland Garros 2026"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="lfield"><label class="llabel">Tipo</label>
+              <select class="linput" id="tTipo"><option value="m1000">ATP 1000</option><option value="slam">Grand Slam</option></select>
+            </div>
+            <div class="lfield"><label class="llabel">Superficie</label><input class="linput" id="tSurf" placeholder="es. Terra"></div>
+            <div class="lfield"><label class="llabel">Location</label><input class="linput" id="tLoc" placeholder="es. Parigi"></div>
+            <div class="lfield"><label class="llabel">Giocatori/squadra</label><input class="linput" id="tMax" type="number" value="6"></div>
+            <div class="lfield"><label class="llabel">Data inizio</label><input class="linput" id="tStart" type="date"></div>
+            <div class="lfield"><label class="llabel">Data fine</label><input class="linput" id="tEnd" type="date"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-p" onclick="saveTorneo()">Salva torneo</button>
+            <button class="btn btn-g" onclick="document.getElementById('addTorneoForm').style.display='none'">Annulla</button>
+          </div>
+        </div>
+      </div>`;
+  } else if(tab==='punti'){
+    wrap.innerHTML = `<div class="card" style="padding:0;overflow:hidden">
+      <table class="atable">
+        <thead><tr><th>Turno</th><th>ATP 1000</th><th>Grand Slam</th></tr></thead>
+        <tbody>
+          ${[['Vincitore','1000','2000'],['Finale','600','1200'],['Semifinale','360','720'],['Quarti','180','360'],['3° turno','90','180'],['2° turno','45','90'],['1° turno','10','10']].map(([r,p,s])=>
+            `<tr><td>${r}</td><td style="color:var(--clay);font-weight:500">${p}</td><td style="color:var(--clay);font-weight:500">${s}</td></tr>`).join('')}
+          <tr style="background:var(--clay-light)">
+            <td colspan="3" style="color:var(--clay);font-size:11px">⚡ Bonus upset: +50 pt ogni volta che una non-TdS batte una TdS</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  } else {
+    wrap.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📸</div>
+      Carica uno screenshot dei risultati per aggiornare il bracket e i punti fanta.<br><br>
+      <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
+    </div>`;
+  }
+}
+
+function admTab(tab, btn){
+  document.querySelectorAll('#admTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderAdm(tab);
+}
+
+function showAddTorneo(){
+  document.getElementById('addTorneoForm').style.display = 'block';
+}
+
+async function saveTorneo(){
+  const nome = document.getElementById('tNome').value.trim();
+  const tipo = document.getElementById('tTipo').value;
+  const surf = document.getElementById('tSurf').value.trim();
+  const loc  = document.getElementById('tLoc').value.trim();
+  const max  = parseInt(document.getElementById('tMax').value) || 6;
+  const start= document.getElementById('tStart').value;
+  const end  = document.getElementById('tEnd').value;
+  if(!nome){ toast('Inserisci il nome del torneo'); return; }
+
+  const { data, error } = await supa.from('tornei').insert([{
+    nome, tipo, superficie:surf, location:loc,
+    max_giocatori:max, data_inizio:start||null, data_fine:end||null, stato:'upcoming'
+  }]).select().single();
+
+  if(error){ toast('Errore: ' + error.message); return; }
+  allTornei.unshift(data);
+  toast('Torneo aggiunto: ' + nome + ' ✓');
+  renderAdm('tornei-adm');
+}
+
+async function resetPwd(uid, nick){
+  const newPwd = 'tennis2026';
+  const { error } = await supa.from('utenti').update({password_hash:newPwd, is_tmp_pwd:true}).eq('id', uid);
+  if(error){ toast('Errore reset'); return; }
+  const idx = allUsers.findIndex(u=>u.id===uid);
+  if(idx>=0){ allUsers[idx].password_hash=newPwd; allUsers[idx].is_tmp_pwd=true; }
+  toast('Password di ' + nick + ' resettata a: tennis2026');
+  renderAdm('utenti');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  setTimeout(() => t.classList.remove('on'), 2800);
+}
+</script>
+</body>
+</html>
