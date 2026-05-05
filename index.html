@@ -889,6 +889,9 @@ async function renderDraft(t, isAdmin){
       }).join('')}`;
   }
 
+
+  // Attach touch drag for mobile
+  setTimeout(attachTouchDrag, 200);
   // Poll aggiornamenti ogni 10 secondi se draft in corso
   if(stato === 'draft'){
     setTimeout(()=>{ if(document.getElementById('tContent')) renderDraft(t, isAdmin); }, 10000);
@@ -920,35 +923,101 @@ function renderPrefList(prefs, assegnati){
 
 function dragStart(e, idx){
   _dragSrcIdx = idx;
-  e.dataTransfer.effectAllowed = 'move';
+  if(e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.style.opacity = '0.4';
 }
 
 function dragOver(e){
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
+  if(e.dataTransfer) e.dataTransfer.dropEffect = 'move';
   e.currentTarget.style.borderColor = 'var(--clay)';
 }
 
 function dragEnd(e){
   e.currentTarget.style.opacity = '';
   e.currentTarget.style.borderColor = 'var(--border)';
-  // Reset all borders
   document.querySelectorAll('#prefList > div').forEach(el => el.style.borderColor = 'var(--border)');
 }
 
 function dragDrop(e, targetIdx){
   e.preventDefault();
   if(_dragSrcIdx === null || _dragSrcIdx === targetIdx) return;
-  // Riordina array
+  reorderPref(_dragSrcIdx, targetIdx);
+  _dragSrcIdx = null;
+}
+
+function reorderPref(fromIdx, toIdx){
   const prefs = window._prefs || [];
-  const moved = prefs.splice(_dragSrcIdx, 1)[0];
-  prefs.splice(targetIdx, 0, moved);
+  const moved = prefs.splice(fromIdx, 1)[0];
+  prefs.splice(toIdx, 0, moved);
   prefs.forEach((p,i) => p.ordine = i+1);
   window._prefs = prefs;
-  _dragSrcIdx = null;
-  // Refresh
   document.getElementById('prefList').innerHTML = renderPrefList(prefs, window._assegnati||new Set());
+  attachTouchDrag();
+}
+
+// Touch drag & drop support
+let _touchDragIdx = null;
+let _touchClone = null;
+
+function attachTouchDrag(){
+  const items = document.querySelectorAll('#prefList > div[data-idx]');
+  items.forEach(el => {
+    el.addEventListener('touchstart', onTouchStart, {passive:false});
+    el.addEventListener('touchmove', onTouchMove, {passive:false});
+    el.addEventListener('touchend', onTouchEnd, {passive:false});
+  });
+}
+
+function onTouchStart(e){
+  const idx = parseInt(e.currentTarget.dataset.idx);
+  // Solo se tocca il handle ⠿
+  const touch = e.touches[0];
+  const target = document.elementFromPoint(touch.clientX, touch.clientY);
+  if(!target || target.textContent.trim() !== '⠿') return;
+  e.preventDefault();
+  _touchDragIdx = idx;
+  // Crea clone visivo
+  _touchClone = e.currentTarget.cloneNode(true);
+  _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.8;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--card2);border:1px solid var(--clay);border-radius:5px;padding:5px 8px;font-size:11px;color:var(--text)`;
+  _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
+  _touchClone.style.top = (touch.clientY - 15) + 'px';
+  document.body.appendChild(_touchClone);
+  e.currentTarget.style.opacity = '0.4';
+}
+
+function onTouchMove(e){
+  if(_touchDragIdx === null || !_touchClone) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth/2) + 'px';
+  _touchClone.style.top = (touch.clientY - 15) + 'px';
+  // Highlight target
+  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+    el.style.borderColor = 'var(--border)';
+  });
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const target = el?.closest('#prefList > div[data-idx]');
+  if(target) target.style.borderColor = 'var(--clay)';
+}
+
+function onTouchEnd(e){
+  if(_touchDragIdx === null) return;
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  // Trova target
+  if(_touchClone) { _touchClone.remove(); _touchClone = null; }
+  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+    el.style.opacity = '';
+    el.style.borderColor = 'var(--border)';
+  });
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const target = el?.closest('#prefList > div[data-idx]');
+  if(target){
+    const toIdx = parseInt(target.dataset.idx);
+    if(toIdx !== _touchDragIdx) reorderPref(_touchDragIdx, toIdx);
+  }
+  _touchDragIdx = null;
 }
 
 function renderGiocatoriList(tennisti, prefs, assegnati){
@@ -994,6 +1063,7 @@ async function aggiungiPref(tennista_id){
   // Refresh UI
   document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
   document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  setTimeout(attachTouchDrag, 50);
 }
 
 async function rimuoviPref(tennista_id){
