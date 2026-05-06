@@ -858,7 +858,7 @@ async function renderDraft(t, isAdmin){
 
   } else if(stato === 'draft'){
     // Draft in corso
-    const giro = Math.floor(pickCorrente / allUsers.length) + 1;
+    const giro = Math.min(Math.floor(pickCorrente / allUsers.length) + 1, maxGiocatori);
     const posInGiro = pickCorrente % allUsers.length;
 
     wrap.innerHTML = `
@@ -1461,11 +1461,29 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
     const {data:squadre} = await supa.from('squadre').select('tennista_id, utente_id').eq('torneo_id', torneoId);
     const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
 
+    // Controlla se tutti gli utenti hanno già il massimo → draft completato
+    const tuttiCompleti = allUsers.every(u => (squadre||[]).filter(s=>s.utente_id===u.id).length >= maxGiocatori);
+    if(tuttiCompleti){
+      await supa.from('tornei').update({stato:'completed', draft_pick_corrente: pick}).eq('id', torneoId);
+      const idx = allTornei.findIndex(t=>t.id===torneoId);
+      if(idx>=0) allTornei[idx].stato='completed';
+      toast('Draft completato!');
+      break;
+    }
+
     // Controlla se questo utente ha già raggiunto il massimo giocatori
     const giaHa = (squadre||[]).filter(s=>s.utente_id===utenteId).length;
     if(giaHa >= maxGiocatori){
       // Utente completo — salta al prossimo
       pick++;
+      // Se siamo oltre la lunghezza dell'ordine, esci
+      if(pick >= draftOrdine.length){
+        await supa.from('tornei').update({stato:'completed'}).eq('id', torneoId);
+        const idx = allTornei.findIndex(t=>t.id===torneoId);
+        if(idx>=0) allTornei[idx].stato='completed';
+        toast('Draft completato!');
+        break;
+      }
       await supa.from('tornei').update({draft_pick_corrente: pick, draft_timer_start: new Date().toISOString()}).eq('id', torneoId);
       continue;
     }
