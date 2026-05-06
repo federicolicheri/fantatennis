@@ -1685,7 +1685,7 @@ function renderAdm(tab){
             <div class="rmeta">${t.tipo==='slam'?'Slam':'ATP 1000'} · ${t.stato}</div>
           </div>
           <span class="badge ${t.tipo==='slam'?'slam':'k1000'}">${t.tipo==='slam'?'Slam':'1000'}</span>
-          <button class="btn btn-d" style="margin-left:8px;font-size:10px" onclick="eliminaTorneo(${t.id},'${t.nome.replace(/'/g,\"\'\")}')" >✕</button>
+          <button class="btn btn-d" style="margin-left:8px;font-size:10px" onclick="eliminaTorneo(${t.id})">✕</button>
         </div>`).join('')
       : `<div class="empty-state"><div class="empty-icon">🎾</div>Nessun torneo. Aggiungine uno!</div>`}
       <div id="addTorneoForm" style="display:none;margin-top:14px">
@@ -1761,13 +1761,14 @@ async function saveTorneo(){
   renderAdm('tornei-adm');
 }
 
-async function eliminaTorneo(id, nome){
-  if(!confirm(`Eliminare "${nome}"? Questa azione rimuoverà anche tutti i tennisti e le squadre associate.`)) return;
-  // Elimina in cascata (FK cascade già impostato)
+async function eliminaTorneo(id){
+  const torneo = allTornei.find(t=>t.id===id);
+  const nome = torneo?.nome || 'questo torneo';
+  if(!confirm('Eliminare "' + nome + '"? Questa azione rimuoverà anche tutti i tennisti e le squadre associate.')) return;
   const { error } = await supa.from('tornei').delete().eq('id', id);
   if(error){ toast('Errore eliminazione: ' + error.message); return; }
   allTornei = allTornei.filter(t=>t.id!==id);
-  toast(`"${nome}" eliminato`);
+  toast('"' + nome + '" eliminato');
   renderAdm('tornei-adm');
 }
 
