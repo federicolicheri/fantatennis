@@ -1214,19 +1214,16 @@ function attachTouchDrag(){
 
 function onTouchStart(e){
   const idx = parseInt(e.currentTarget.dataset.idx);
-  // Solo se tocca il handle ⠿
-  const touch = e.touches[0];
-  const target = document.elementFromPoint(touch.clientX, touch.clientY);
-  if(!target || target.textContent.trim() !== '⠿') return;
   e.preventDefault();
   _touchDragIdx = idx;
+  const touch = e.touches[0];
   // Crea clone visivo
   _touchClone = e.currentTarget.cloneNode(true);
-  _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.8;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--card2);border:1px solid var(--clay);border-radius:5px;padding:5px 8px;font-size:11px;color:var(--text)`;
+  _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.85;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--dark2);border:1.5px solid var(--clay);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.5)`;
   _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
-  _touchClone.style.top = (touch.clientY - 15) + 'px';
+  _touchClone.style.top = (touch.clientY - e.currentTarget.offsetHeight/2) + 'px';
   document.body.appendChild(_touchClone);
-  e.currentTarget.style.opacity = '0.4';
+  e.currentTarget.style.opacity = '0.3';
 }
 
 function onTouchMove(e){
