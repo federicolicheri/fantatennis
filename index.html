@@ -759,13 +759,53 @@ async function tTab(tab, btn){
     </div>
     ${isAdmin ? `<button class="btn btn-p" onclick="go('admin')">⚙ Gestisci da admin</button>` : ''}`,
     draft: null,
-    'rank-t': `<div class="empty-state"><div class="empty-icon">📊</div>Nessun risultato ancora disponibile.</div>`,
+    'rank-t': '',
   };
   if(tab === 'draft'){
     await renderDraft(t, isAdmin);
+  } else if(tab === 'rank-t'){
+    await renderClassificaTorneo(currentTorneoId);
   } else {
     document.getElementById('tContent').innerHTML = tabs[tab] || '';
   }
+}
+
+async function renderClassificaTorneo(torneoId){
+  const wrap = document.getElementById('tContent');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+  
+  const {data:classifica} = await supa.from('classifica')
+    .select('*, utenti(*)').eq('torneo_id', torneoId).order('punti', {ascending:false});
+  
+  if(!classifica || !classifica.length){
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div>Nessun punteggio ancora. Completa il draft e clicca Ricalcola punti dall admin.</div>';
+    return;
+  }
+  
+  // Carica squadre per mostrare i giocatori
+  const {data:squadre} = await supa.from('squadre')
+    .select('*, tennisti(*)').eq('torneo_id', torneoId);
+  
+  wrap.innerHTML = classifica.map((c,i) => {
+    const u = c.utenti;
+    const miaSquadra = (squadre||[]).filter(s=>s.utente_id===c.utente_id);
+    return `<div class="rr ${i===0?'r1':''}" style="flex-direction:column;align-items:stretch;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:${miaSquadra.length?'8px':'0'}">
+        <div class="rpos ${i===0?'p1':''}">${i+1}</div>
+        <div class="rav" style="background:${u?.color||'#D85A30'}">${u?.avatar_url?`<img src="${u.avatar_url}">`:(u?.initials||'?')}</div>
+        <div class="ri">
+          <div class="rname">${u?.nickname||'—'}${u?.is_admin?' <span style="font-size:9px;color:var(--clay)">👑</span>':''}</div>
+          <div class="rmeta">${miaSquadra.length} giocatori</div>
+        </div>
+        <div class="rpts">${c.punti}</div>
+      </div>
+      ${miaSquadra.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:55px">
+        ${miaSquadra.map(s=>`<span style="font-size:10px;background:var(--card2);border:0.5px solid var(--border);border-radius:4px;padding:2px 7px;color:var(--text2)">
+          ${s.tennisti?.flag||''} ${s.tennisti?.nome||'—'} ${s.tennisti?.seed?'('+s.tennisti.seed+')':''}
+        </span>`).join('')}
+      </div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
@@ -2485,8 +2525,9 @@ async function eliminaTorneo(id){
 
 async function ricalcolaPuntiAdmin(){
   // Ricalcola per tutti i tornei con draft completato
-  const torneiCompletati = allTornei.filter(t => t.stato === 'draft' || t.stato === 'completed' || t.stato === 'live');
-  if(!torneiCompletati.length){ toast('Nessun torneo attivo'); return; }
+  // Ricalcola per tutti i tornei (qualsiasi stato, basta che abbiano squadre)
+  const torneiCompletati = allTornei;
+  if(!torneiCompletati.length){ toast('Nessun torneo disponibile'); return; }
   toast('Ricalcolo in corso...');
   for(const t of torneiCompletati){
     await calcolaPuntiFanta(t.id);
