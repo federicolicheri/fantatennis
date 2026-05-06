@@ -1783,6 +1783,11 @@ async function renderTabellone(t, isAdmin){
     .select('*').eq('torneo_id', currentTorneoId).order('slot');
   currentTennisti = tennisti || [];
 
+  // Carica risultati
+  const { data: risultati } = await supa.from('risultati')
+    .select('*').eq('torneo_id', currentTorneoId);
+  window._risultati = risultati || [];
+
   if(currentTennisti.length > 0){
     // Mostra bracket
     wrap.innerHTML = buildBracketHTML(currentTennisti, isAdmin, t);
@@ -1988,12 +1993,24 @@ function renderBracketSVG(tennisti){
   for(let i=1; i<=maxSlot; i++) slots0.push(bySlot[i] || {slot:i, nome:'Bye', tipo:'bye', seed:null, flag:null});
 
   // Build all rounds
+  // Build lookup maps from risultati
+  const risultati = window._risultati || [];
+  const vincitoriMap = {}; // tennista_id → {score, is_upset}
+  const perdentiSet = new Set();
+  risultati.forEach(r => {
+    vincitoriMap[r.tennista_vincitore_id] = {score: r.punteggio, upset: r.is_upset, turno: r.turno};
+    perdentiSet.add(r.tennista_perdente_id);
+  });
+
   function winnerSlot(top, bot){
     if(!top || top.tipo==='bye') return bot ? {...bot, _fromBye:true} : null;
     if(!bot || bot.tipo==='bye') return top ? {...top, _fromBye:true} : null;
-    // Check if there's a result stored
-    if(top.vincitore) return {...top, _score: top.score};
-    if(bot.vincitore) return {...bot, _score: bot.score};
+    // Check risultati DB
+    if(vincitoriMap[top.id]) return {...top, _score: vincitoriMap[top.id].score, _won:true};
+    if(vincitoriMap[bot.id]) return {...bot, _score: vincitoriMap[bot.id].score, _won:true};
+    // Check eliminato_al_turno
+    if(top.eliminato_al_turno) return {...bot, _fromResult:true};
+    if(bot.eliminato_al_turno) return {...top, _fromResult:true};
     return {tipo:'tbd', nome:'—', seed:null, flag:null};
   }
 
@@ -2097,14 +2114,23 @@ function playerRowHTML(p){
   const isBye = p.tipo==='bye';
   const isQ = p.tipo==='q';
   const isTbd = p.tipo==='tbd';
-  const bg = isBye ? 'background:var(--dark3)' : '';
-  const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : 'color:var(--text)';
+  const isWinner = !!p._won || !!p._fromBye || !!p._fromResult;
+  
+  // Check if this player lost (is in perdentiSet)
+  const risultati = window._risultati||[];
+  const perdentiSet = new Set(risultati.map(r=>r.tennista_perdente_id));
+  const isLoser = p.id && perdentiSet.has(p.id);
+
+  const bg = isBye ? 'background:var(--dark3);' : isLoser ? 'background:rgba(0,0,0,0.2);' : '';
+  const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
+  const fontW = isWinner && !isBye && !isTbd ? 'font-weight:600;' : '';
   const seedHTML = p.seed ? `<span style="font-size:8px;color:#fff;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : '';
   const flagHTML = p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : '';
-  const scoreHTML = p._score ? `<span style="font-size:9px;color:var(--green);margin-left:2px;flex-shrink:0">${p._score}</span>` : '';
-  const name = isBye ? '(Bye)' : isQ ? 'Qualifier' : isTbd ? '—' : (p.nome||'—');
-  return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${bg};${col}">
-    ${flagHTML}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>${seedHTML}${scoreHTML}
+  const scoreHTML = p._score ? `<span style="font-size:9px;color:var(--green);margin-left:3px;flex-shrink:0;font-weight:500">${p._score}</span>` : '';
+  const name = isBye ? '(Bye)' : isQ ? (p.nome||'Qualifier') : isTbd ? '—' : (p.nome||'—');
+  const opacity = isLoser ? 'opacity:0.5;' : '';
+  return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${bg}${opacity}${col}">
+    ${flagHTML}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${fontW}">${name}</span>${seedHTML}${scoreHTML}
   </div>`;
 }
 
