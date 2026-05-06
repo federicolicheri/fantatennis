@@ -1201,8 +1201,8 @@ async function avviaDraft(torneoId){
   const idx = allTornei.findIndex(t=>t.id===torneoId);
   if(idx>=0){ allTornei[idx].stato='draft'; }
   toast('Draft avviato!');
-  const t = allTornei.find(t=>t.id===torneoId);
-  renderDraft(t, true);
+  // Processa subito auto-pick se il primo utente ha lista preferenze
+  await processAutoPicks(torneoId, 0, snakeOrdine);
 }
 
 async function scegli(tennista_id, torneoId){
@@ -1222,7 +1222,6 @@ async function scegli(tennista_id, torneoId){
 
   // Avanza pick
   const nuovoPick = pickCorrente+1;
-  const maxGiocatori = torneo.max_giocatori||6;
   const nuovoStato = nuovoPick >= draftOrdine.length ? 'completed' : 'draft';
   await supa.from('tornei').update({
     draft_pick_corrente: nuovoPick,
@@ -1233,8 +1232,65 @@ async function scegli(tennista_id, torneoId){
   if(nuovoStato==='completed'){
     const idx=allTornei.findIndex(t=>t.id===torneoId);
     if(idx>=0) allTornei[idx].stato='completed';
+    toast('Draft completato!');
+    const t = allTornei.find(t=>t.id===torneoId);
+    renderDraft(t, currentUser.is_admin);
+    return;
   }
+
+  // Processa auto-pick per il prossimo utente se ha lista preferenze
   toast('Giocatore scelto!');
+  await processAutoPicks(torneoId, nuovoPick, draftOrdine);
+}
+
+// Processa auto-pick in cascata finché ci sono preferenze valide
+async function processAutoPicks(torneoId, startPick, draftOrdine){
+  let pick = startPick;
+  
+  while(pick < draftOrdine.length){
+    const utenteId = draftOrdine[pick];
+    
+    // Carica giocatori già assegnati
+    const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id', torneoId);
+    const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
+    
+    // Carica preferenze dell'utente di turno
+    const {data:prefs} = await supa.from('draft_preferenze')
+      .select('tennista_id').eq('torneo_id', torneoId)
+      .eq('utente_id', utenteId).order('ordine');
+    
+    // Trova il primo giocatore disponibile nella lista
+    const primoDisp = (prefs||[]).find(p => !assegnati.has(p.tennista_id));
+    
+    if(!primoDisp) break; // Nessuna preferenza disponibile → ferma e aspetta scelta manuale
+    
+    // Assegna automaticamente
+    const {error} = await supa.from('squadre').insert({
+      utente_id: utenteId, torneo_id: torneoId,
+      tennista_id: primoDisp.tennista_id, ordine_draft: pick+1,
+    });
+    if(error) break;
+    
+    pick++;
+    const nuovoStato = pick >= draftOrdine.length ? 'completed' : 'draft';
+    await supa.from('tornei').update({
+      draft_pick_corrente: pick,
+      draft_timer_start: new Date().toISOString(),
+      stato: nuovoStato,
+    }).eq('id', torneoId);
+    
+    if(nuovoStato === 'completed'){
+      const idx = allTornei.findIndex(t=>t.id===torneoId);
+      if(idx>=0) allTornei[idx].stato='completed';
+      toast('Draft completato!');
+      break;
+    }
+    
+    // Se il prossimo utente è l'utente corrente, fermati (aspetta la sua scelta manuale)
+    if(draftOrdine[pick] === currentUser.id) break;
+  }
+  
+  // Ricarica la UI
   const t = allTornei.find(t=>t.id===torneoId);
   renderDraft(t, currentUser.is_admin);
 }
