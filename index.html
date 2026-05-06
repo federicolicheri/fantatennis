@@ -849,7 +849,7 @@ async function renderDraft(t, isAdmin){
         <div>
           <div class="stitle">Giocatori disponibili</div>
           <input class="linput" id="searchGiocatori" placeholder="Cerca..." oninput="filterGiocatori()" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
-          <div id="giocatoriList" style="max-height:400px;overflow-y:auto">${renderGiocatoriList(tennisti||[], prefs||[], assegnati)}</div>
+          <div id="giocatoriList" style="overflow-x:auto;overflow-y:auto;max-height:500px">${renderGiocatoriList(tennisti||[], prefs||[], assegnati, squadre||[])}</div>
         </div>
       </div>`;
     window._tennisti = tennisti||[];
@@ -927,7 +927,7 @@ async function renderDraft(t, isAdmin){
             </div>
             <div class="stitle" style="margin-bottom:6px">Giocatori disponibili — clicca per aggiungere alla lista</div>
             <input class="linput" id="searchGiocatoriDraft" placeholder="Cerca..." oninput="filterGiocatoriDraftList()" style="margin-bottom:8px;font-size:11px;padding:5px 9px">
-            <div id="giocatoriDraftList" style="max-height:300px;overflow-y:auto">${renderTabelloneDraft(tennisti||[], assegnati, squadre||[])}</div>
+            <div id="giocatoriDraftList" style="overflow-x:auto;overflow-y:auto;max-height:400px">${renderTabelloneDraft(tennisti||[], assegnati, squadre||[])}</div>
           </div>
         </div>
       </div>`;
@@ -1011,55 +1011,114 @@ let _dragSrcIdx = null;
 
 // Tabellone visivo durante il draft — giocatori già presi in grigio con sigla
 function renderTabelloneDraft(tennisti, assegnati, squadre){
-  const prefs = window._prefs||[];
+  return renderBracketPickList(tennisti, window._prefs||[], assegnati, squadre);
+}
+
+// Unified bracket pick list — used both in pre-draft and during draft
+function renderBracketPickList(tennisti, prefs, assegnati, squadre){
   const prefIds = new Set(prefs.map(p=>p.tennista_id));
-  // Mappa tennista_id → iniziali utente che lo ha scelto
+  // Map tennista_id → user initials + color
   const takenBy = {};
-  squadre.forEach(s => {
+  (squadre||[]).forEach(s => {
     if(s.tennista_id && s.utente_id){
       const u = allUsers.find(u=>u.id===s.utente_id);
-      takenBy[s.tennista_id] = u?.initials||'?';
+      takenBy[s.tennista_id] = {i: u?.initials||'?', c: u?.color||'#D85A30'};
     }
   });
-  // Raggruppa per match (coppie di slot)
+
   const bySlot = {};
   tennisti.forEach(t => bySlot[t.slot] = t);
   const maxSlot = Math.max(...tennisti.map(t=>t.slot), 0);
-  let html = '';
-  for(let i=1; i<=maxSlot; i+=2){
-    const a = bySlot[i];
-    const b = bySlot[i+1];
-    if(!a && !b) continue;
-    const matchIdx = Math.floor((i-1)/2);
-    const colors = ['rgba(216,90,48,0.07)','rgba(41,128,185,0.07)','rgba(39,174,96,0.07)','rgba(243,156,18,0.07)'];
-    const borders = ['rgba(216,90,48,0.25)','rgba(41,128,185,0.25)','rgba(39,174,96,0.25)','rgba(243,156,18,0.25)'];
-    const ci = matchIdx % 4;
-    html += `<div style="border:1px solid ${borders[ci]};border-radius:5px;background:${colors[ci]};overflow:hidden;margin-bottom:3px">
-      ${draftPlayerRow(a, assegnati, takenBy, prefIds)}
-      ${draftPlayerRow(b, assegnati, takenBy, prefIds)}
-    </div>`;
+
+  const CONN = 12; // connector width px
+  const MW = 150;  // match width px
+  const ROW_H = 24;
+  const MATCH_H = ROW_H * 2;
+  const MB = 3; // margin between matches
+  const STEP = MATCH_H + MB;
+
+  const matchCount = Math.ceil(maxSlot / 2);
+  const totalH = matchCount * STEP + 20;
+
+  const altColors = ['rgba(216,90,48,0.07)','rgba(41,128,185,0.07)','rgba(39,174,96,0.07)','rgba(243,156,18,0.07)'];
+  const altBorders = ['rgba(216,90,48,0.3)','rgba(41,128,185,0.3)','rgba(39,174,96,0.3)','rgba(243,156,18,0.3)'];
+
+  // Build R2 preview: for each pair of matches, who advances
+  function winnerOf(a, b){
+    if(!a || a.tipo==='bye') return b;
+    if(!b || b.tipo==='bye') return a;
+    return null; // TBD
   }
-  return html || '<div style="font-size:11px;color:var(--text2)">Nessun giocatore</div>';
+
+  let matchesHtml = '';
+  let connectorsHtml = '';
+  let previewHtml = '';
+  const r2Shown = new Set();
+
+  for(let mi=0; mi<matchCount; mi++){
+    const slA = bySlot[mi*2+1];
+    const slB = bySlot[mi*2+2];
+    if(!slA && !slB) continue;
+    const ci = mi % 4;
+    const top = mi * STEP;
+
+    // Current match
+    matchesHtml += `<div style="position:absolute;left:0;top:${top}px;width:${MW}px;border:1px solid ${altBorders[ci]};border-radius:5px;background:${altColors[ci]};overflow:hidden">
+      ${bracketPickRow(slA, assegnati, takenBy, prefIds, ROW_H)}
+      ${bracketPickRow(slB, assegnati, takenBy, prefIds, ROW_H)}
+    </div>`;
+
+    // Connector + R2 preview for pairs of matches
+    if(mi % 2 === 0 && mi+1 < matchCount){
+      const slC = bySlot[(mi+1)*2+1];
+      const slD = bySlot[(mi+1)*2+2];
+      const topNext = (mi+1) * STEP;
+      const midA = top + MATCH_H/2;
+      const midB = topNext + MATCH_H/2;
+      const midY = (midA + midB) / 2;
+      const r2Top = Math.round(midY - MATCH_H/2);
+
+      // Connector lines
+      connectorsHtml += `<svg style="position:absolute;left:${MW}px;top:0;pointer-events:none;overflow:visible" width="${CONN}" height="${totalH}">
+        <path d="M0,${midA} L${CONN/2},${midA} L${CONN/2},${midY} L${CONN},${midY}" stroke="var(--border2)" stroke-width="1" fill="none"/>
+        <path d="M0,${midB} L${CONN/2},${midB} L${CONN/2},${midY} L${CONN},${midY}" stroke="var(--border2)" stroke-width="1" fill="none"/>
+      </svg>`;
+
+      // R2 preview
+      const r2A = winnerOf(slA, slB);
+      const r2B = winnerOf(slC, slD);
+      previewHtml += `<div style="position:absolute;left:${MW+CONN}px;top:${r2Top}px;width:${MW}px;border:0.5px solid var(--border2);border-radius:5px;background:var(--card);overflow:hidden;opacity:0.75">
+        ${bracketPickRow(r2A, assegnati, takenBy, prefIds, ROW_H, true)}
+        ${bracketPickRow(r2B, assegnati, takenBy, prefIds, ROW_H, true)}
+      </div>`;
+    }
+  }
+
+  const totalW = MW + CONN + MW + 10;
+  return `<div style="position:relative;width:${totalW}px;height:${totalH}px;min-width:${totalW}px">
+    ${matchesHtml}${connectorsHtml}${previewHtml}
+  </div>`;
 }
 
-function draftPlayerRow(p, assegnati, takenBy, prefIds){
-  if(!p) return '';
+function bracketPickRow(p, assegnati, takenBy, prefIds, ROW_H, isPreview){
+  if(!p) return `<div style="min-height:${ROW_H}px;border-bottom:0.5px solid var(--border);padding:3px 7px;display:flex;align-items:center"><span style="font-size:10px;color:var(--text2)">—</span></div>`;
   const isBye = p.tipo==='bye';
-  const isTaken = assegnati.has(p.id);
-  const inPrefs = prefIds.has(p.id);
-  const takenByInitials = takenBy[p.id];
-  if(isBye) return `<div style="padding:3px 8px;font-size:10px;color:var(--text2);min-height:22px;border-bottom:0.5px solid var(--border)">(Bye)</div>`;
-  const onclick = !isTaken && !inPrefs ? `onclick="aggiungiPref(${p.id})"` : '';
-  const cursor = !isTaken && !inPrefs ? 'cursor:pointer' : 'cursor:default';
-  const opacity = isTaken ? 'opacity:0.4' : '';
-  const bg = isTaken ? 'background:var(--dark3)' : '';
-  return `<div ${onclick} style="display:flex;align-items:center;gap:5px;padding:3px 8px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${cursor};${opacity};${bg};transition:background 0.1s"
-    ${!isTaken && !inPrefs ? 'onmouseover="this.style.opacity=0.7" onmouseout="this.style.opacity=1"' : ''}>
-    ${p.flag?`<span style="font-size:9px;flex-shrink:0">${p.flag}</span>`:''}
-    <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isTaken?'var(--text2)':'var(--text)'}">${p.nome||'—'}</span>
-    ${p.seed?`<span style="font-size:8px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>`:''}
-    ${isTaken?`<span style="font-size:9px;font-weight:600;color:var(--text2);flex-shrink:0">${takenByInitials}</span>`:''}
-    ${inPrefs&&!isTaken?`<span style="font-size:9px;color:var(--clay);flex-shrink:0">✓</span>`:''}
+  const isQ = p.tipo==='q';
+  const isTaken = assegnati && assegnati.has(p.id);
+  const inPrefs = prefIds && prefIds.has(p.id);
+  const tb = takenBy && takenBy[p.id];
+  const clickable = !isBye && !isQ && !isTaken && !inPrefs && !isPreview;
+  const name = isBye ? '(Bye)' : isQ ? 'Qualifier' : (p.nome||'—');
+  const textCol = isBye||isQ ? 'var(--text2)' : isTaken ? 'var(--text2)' : 'var(--text)';
+  const bg = isBye ? 'background:var(--dark3);' : isTaken ? 'background:rgba(0,0,0,0.15);' : '';
+  return `<div ${clickable ? `onclick="aggiungiPref(${p.id})"` : ''}
+    style="display:flex;align-items:center;gap:4px;padding:3px 7px;min-height:${ROW_H}px;border-bottom:0.5px solid var(--border);${bg}cursor:${clickable?'pointer':'default'};${isTaken?'opacity:0.55':''}">
+    ${!isBye&&!isQ&&p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : ''}
+    <span style="flex:1;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${textCol}">${name}</span>
+    ${p.seed ? `<span style="font-size:8px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : ''}
+    ${tb ? `<span style="font-size:8px;font-weight:700;color:${tb.c};flex-shrink:0;background:rgba(0,0,0,0.3);border-radius:2px;padding:1px 3px">${tb.i}</span>` : ''}
+    ${inPrefs&&!isTaken ? `<span style="font-size:9px;color:var(--clay);flex-shrink:0">✓</span>` : ''}
+    ${clickable ? `<span style="font-size:9px;color:var(--text2);flex-shrink:0">+</span>` : ''}
   </div>`;
 }
 
@@ -1201,18 +1260,8 @@ function onTouchEnd(e){
   _touchDragIdx = null;
 }
 
-function renderGiocatoriList(tennisti, prefs, assegnati){
-  const prefIds = new Set(prefs.map(p=>p.tennista_id));
-  return tennisti.filter(t=>t.tipo!=='bye').map(t => {
-    const inPrefs = prefIds.has(t.id);
-    const taken = assegnati.has(t.id);
-    return `<div onclick="${!inPrefs&&!taken?`aggiungiPref(${t.id})`:'null'}"
-      style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;margin-bottom:2px;cursor:${!inPrefs&&!taken?'pointer':'default'};${inPrefs?'background:var(--clay-light)':taken?'opacity:0.35':''}:hover{background:var(--card2)}">
-      <span style="font-size:11px;flex:1">${t.flag||''} ${t.nome}</span>
-      ${t.seed?`<span style="font-size:9px;background:${t.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 3px">${t.seed}</span>`:''}
-      ${inPrefs?'<span style="font-size:9px;color:var(--clay)">✓</span>':taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':'<span style="font-size:9px;color:var(--text2)">+</span>'}
-    </div>`;
-  }).join('');
+function renderGiocatoriList(tennisti, prefs, assegnati, squadre){
+  return renderBracketPickList(tennisti, prefs, assegnati, squadre||[]);
 }
 
 function renderGiocatoriListDraft(tennisti, assegnati, torneoId){
@@ -1270,7 +1319,7 @@ async function aggiungiPref(tennista_id){
   if(prefListEl) prefListEl.innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
   // Refresh lista giocatori (pre-draft)
   const giocEl = document.getElementById('giocatoriList');
-  if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set(), window._squadre||[]);
   // Refresh tabellone draft (in-draft)
   const draftEl = document.getElementById('giocatoriDraftList');
   if(draftEl) draftEl.innerHTML = renderTabelloneDraft(window._tennisti||[], window._assegnati||new Set(), window._squadre||[]);
