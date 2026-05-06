@@ -1447,8 +1447,32 @@ async function scegli(tennista_id, torneoId){
 
 // Processa auto-pick in cascata finché ci sono preferenze valide
 // Processa TUTTI i pick in sequenza incluso l'utente corrente se ha lista
+let _draftProcessing = false;
+
 async function processAllAutoPicks(torneoId, startPick, draftOrdine){
-  let pick = startPick;
+  // Evita esecuzioni parallele
+  if(_draftProcessing){ 
+    console.log('Draft already processing, skipping');
+    return; 
+  }
+  _draftProcessing = true;
+  
+  try {
+    await _processAllAutoPicksInner(torneoId, startPick, draftOrdine);
+  } finally {
+    _draftProcessing = false;
+  }
+}
+
+async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
+  // Ricarica sempre lo stato aggiornato dal DB prima di iniziare
+  const {data:torneoFresh} = await supa.from('tornei').select('*').eq('id',torneoId).single();
+  if(!torneoFresh) return;
+  
+  // Usa sempre il pick corrente dal DB, non quello passato come parametro
+  let pick = torneoFresh.draft_pick_corrente || 0;
+  draftOrdine = torneoFresh.draft_ordine || draftOrdine;
+  
   const maxGiocatori = allTornei.find(t=>t.id===torneoId)?.max_giocatori || 6;
 
   while(pick < draftOrdine.length){
@@ -1494,11 +1518,21 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
 
     if(primoDisp){
       // Assegna automaticamente dalla lista preferenze
+      // Riverifica che il giocatore sia ancora libero (doppio check anti-race condition)
+      const {data:checkSq} = await supa.from('squadre').select('id').eq('torneo_id',torneoId).eq('tennista_id',primoDisp.tennista_id).single();
+      if(checkSq){ 
+        // Giocatore già preso! Riprova con il prossimo pick
+        continue; 
+      }
       const {error} = await supa.from('squadre').insert({
         utente_id: utenteId, torneo_id: torneoId,
         tennista_id: primoDisp.tennista_id, ordine_draft: pick+1,
       });
-      if(error) break;
+      if(error){ 
+        // Potrebbe essere un conflitto di unicità — riprova
+        console.log('Insert error, skipping:', error.message);
+        continue;
+      }
       pick++;
       const nuovoStato = pick >= draftOrdine.length ? 'completed' : 'draft';
       await supa.from('tornei').update({
@@ -1560,6 +1594,9 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
       const tds = liberi.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
       const target = tds[0] || liberi[0];
       if(target){
+        // Verifica che il giocatore non sia già stato preso
+        const {data:checkAuto} = await supa.from('squadre').select('id').eq('torneo_id',torneoId).eq('tennista_id',target.id).single();
+        if(checkAuto){ continue; } // già preso, ricerca prossimo
         const {error:insErr} = await supa.from('squadre').insert({
           utente_id: utenteId, torneo_id: torneoId,
           tennista_id: target.id, ordine_draft: pick+1,
