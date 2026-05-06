@@ -825,6 +825,13 @@ async function renderDraft(t, isAdmin){
           <button class="btn btn-p" style="margin-right:8px" onclick="impostaDraftOra(${currentTorneoId})">⏰ Imposta orario</button>
           <button class="btn btn-g" onclick="avviaDraft(${currentTorneoId})">▶ Avvia subito</button>
         </div>` : ''}
+        <div style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--dark3);border-radius:8px;border:0.5px solid var(--border2)">
+          <input type="checkbox" id="autopickCheck" ${getAutopick(currentTorneoId)?'checked':''} onchange="setAutopick(currentTorneoId, this.checked)" style="width:16px;height:16px;accent-color:var(--clay);cursor:pointer;flex-shrink:0">
+          <div>
+            <div style="font-size:12px;font-weight:500;color:var(--text)">Autopick attivo</div>
+            <div style="font-size:11px;color:var(--text2)">Se la tua lista finisce, il sistema sceglierà automaticamente il miglior giocatore disponibile invece di aspettare 30 minuti.</div>
+          </div>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
@@ -1262,7 +1269,40 @@ async function processAutoPicks(torneoId, startPick, draftOrdine){
     // Trova il primo giocatore disponibile nella lista
     const primoDisp = (prefs||[]).find(p => !assegnati.has(p.tennista_id));
     
-    if(!primoDisp) break; // Nessuna preferenza disponibile → ferma e aspetta scelta manuale
+    if(!primoDisp){
+      // Controlla se questo utente ha autopick attivo
+      const autopickKey = 'autopick_'+torneoId+'_'+utenteId;
+      const autopickActive = localStorage.getItem(autopickKey) !== 'false'; // default true
+      if(autopickActive){
+        // Auto-assegna il miglior giocatore disponibile (TdS con seed più basso, poi per slot)
+        const {data:tennisti} = await supa.from('tennisti')
+          .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('seed', {nullsFirst:false});
+        const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id));
+        const target = liberi.find(t=>t.seed) || liberi[0];
+        if(target){
+          await supa.from('squadre').insert({
+            utente_id: utenteId, torneo_id: torneoId,
+            tennista_id: target.id, ordine_draft: pick+1,
+          });
+          pick++;
+          const nuovoStato = pick >= draftOrdine.length ? 'completed' : 'draft';
+          await supa.from('tornei').update({
+            draft_pick_corrente: pick,
+            draft_timer_start: new Date().toISOString(),
+            stato: nuovoStato,
+          }).eq('id', torneoId);
+          if(nuovoStato === 'completed'){
+            const idx = allTornei.findIndex(t=>t.id===torneoId);
+            if(idx>=0) allTornei[idx].stato='completed';
+            toast('Draft completato!');
+            break;
+          }
+          if(draftOrdine[pick] === currentUser.id) break;
+          continue; // continua il loop per il prossimo utente
+        }
+      }
+      break; // Autopick disattivato o nessun giocatore disponibile
+    }
     
     // Assegna automaticamente
     const {error} = await supa.from('squadre').insert({
@@ -1293,6 +1333,15 @@ async function processAutoPicks(torneoId, startPick, draftOrdine){
   // Ricarica la UI
   const t = allTornei.find(t=>t.id===torneoId);
   renderDraft(t, currentUser.is_admin);
+}
+
+function getAutopick(torneoId){
+  try { return localStorage.getItem('autopick_'+torneoId+'_'+currentUser?.id) !== 'false'; } catch(e){ return true; }
+}
+
+function setAutopick(torneoId, val){
+  try { localStorage.setItem('autopick_'+torneoId+'_'+currentUser?.id, val ? 'true' : 'false'); } catch(e){}
+  toast(val ? 'Autopick attivato' : 'Autopick disattivato');
 }
 
 function avviaTimer(startTime){
