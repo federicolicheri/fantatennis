@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -165,6 +165,10 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
 .empty-state{text-align:center;padding:32px 20px;color:var(--text2);font-size:13px}
 .empty-icon{font-size:32px;margin-bottom:10px}
 
+/* ni-label: hidden on desktop, shown on mobile */
+.ni-icon{font-size:17px}
+.ni-label{display:none;font-size:9px;font-weight:500;line-height:1;margin-top:2px}
+
 /* ---- MOBILE ---- */
 @media(max-width:600px){
   html,body{height:100%;overflow:hidden}
@@ -179,12 +183,26 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
   /* Layout: sidebar in basso invece che a sinistra */
   .layout{flex-direction:column;flex:1;overflow:hidden}
   .sidebar{
-    width:100%!important;height:52px;flex-direction:row;
+    width:100%!important;height:62px;flex-direction:row;
     justify-content:space-around;align-items:center;
     border-right:none;border-top:0.5px solid var(--border2);
-    padding:0 8px;gap:0;order:2;flex-shrink:0
+    background:var(--dark2);
+    padding:0;gap:0;order:2;flex-shrink:0
   }
-  .ni{width:44px;height:44px;font-size:18px}
+  .ni{
+    width:20%;height:100%;border-radius:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:22px;gap:2px;
+    border-bottom:2px solid transparent;
+  }
+  .ni.active{
+    background:rgba(216,90,48,0.08);
+    border-bottom-color:var(--clay);
+    color:var(--clay);
+  }
+  .ni-icon{font-size:20px}
+  .ni-label{display:block;color:inherit}
+  .ni.active .ni-label{color:var(--clay)}
   .ni-tooltip{display:none}
   .ni-spacer{display:none}
 
@@ -314,22 +332,22 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
   </div>
   <div class="layout">
     <div class="sidebar">
-      <div class="ni active" id="ni-home"    onclick="go('home')"    title="Home">🏠<span class="ni-tooltip">Home</span></div>
-      <div class="ni"        id="ni-tornei"  onclick="go('tornei')"  title="Tornei">🎾<span class="ni-tooltip">Tornei</span></div>
-      <div class="ni"        id="ni-class"   onclick="go('class')"   title="Classifica">🏆<span class="ni-tooltip">Classifica</span></div>
-      <div class="ni"        id="ni-profilo" onclick="go('profilo')" title="Profilo">👤<span class="ni-tooltip">Profilo</span></div>
+      <div class="ni active" id="ni-home"    onclick="go('home')"    title="Home"><span class="ni-icon">🏠</span><span class="ni-label">Home</span><span class="ni-tooltip">Home</span></div>
+      <div class="ni"        id="ni-tornei"  onclick="go('tornei')"  title="Tornei"><span class="ni-icon">🎾</span><span class="ni-label">Tornei</span><span class="ni-tooltip">Tornei</span></div>
+      <div class="ni"        id="ni-class"   onclick="go('class')"   title="Classifica"><span class="ni-icon">🏆</span><span class="ni-label">Classifica</span><span class="ni-tooltip">Classifica</span></div>
+      <div class="ni"        id="ni-profilo" onclick="go('profilo')" title="Profilo"><span class="ni-icon">👤</span><span class="ni-label">Profilo</span><span class="ni-tooltip">Profilo</span></div>
       <div class="ni-spacer"></div>
-      <div class="ni"        id="ni-admin"   onclick="go('admin')"   title="Admin" style="display:none">⚙️<span class="ni-tooltip">Admin</span></div>
+      <div class="ni"        id="ni-admin"   onclick="go('admin')"   title="Admin" style="display:none"><span class="ni-icon">⚙️</span><span class="ni-label">Admin</span><span class="ni-tooltip">Admin</span></div>
     </div>
     <div class="main" id="mainContent">
 
       <!-- HOME -->
       <div class="scr on" id="s-home">
-        <div class="uban">
+        <div class="uban" id="homeBanner">
           <div style="font-size:26px;flex-shrink:0">🎾</div>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:500">Roland Garros 2026</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:1px">Slam · Parigi · Terra · 26 mag – 8 giu 2026</div>
+            <div style="font-size:13px;font-weight:500" id="bannerTitle">—</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:1px" id="bannerMeta">—</div>
           </div>
           <button class="btn btn-p" onclick="go('tornei')">Vai →</button>
         </div>
@@ -600,6 +618,15 @@ function go(id){
 // HOME
 // ============================================================
 async function renderHome(){
+  // Aggiorna banner torneo attuale
+  const torneoAttuale = allTornei.find(t=>t.stato==='live') || allTornei.find(t=>t.stato==='draft') || allTornei.find(t=>t.stato==='upcoming') || allTornei[0];
+  if(torneoAttuale){
+    document.getElementById('bannerTitle').textContent = torneoAttuale.nome;
+    document.getElementById('bannerMeta').textContent = `${torneoAttuale.tipo==='slam'?'Slam':'ATP 1000'} · ${torneoAttuale.location||''} · ${torneoAttuale.superficie||''} · ${formatDate(torneoAttuale.data_inizio)} – ${formatDate(torneoAttuale.data_fine)}`;
+  } else {
+    document.getElementById('homeBanner').style.display = 'none';
+  }
+
   // Carica classifica
   const { data } = await supa.from('classifica').select('*, utenti(*)');
   // Aggrega punti per utente
@@ -782,12 +809,22 @@ async function renderDraft(t, isAdmin){
   const isMioTurno = utenteCorrente === currentUser.id;
 
   if(stato === 'upcoming'){
-    // Draft non avviato
+    const draftStart = torneo.draft_start ? new Date(torneo.draft_start) : null;
+    const hasFutureStart = draftStart && draftStart > new Date();
     wrap.innerHTML = `
       <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:10px;padding:20px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:500;margin-bottom:4px">⏳ Draft non ancora avviato</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Prepara la tua lista di preferenze. L'admin avvierà il draft quando tutti sono pronti.</div>
-        ${isAdmin ? `<button class="btn btn-p" onclick="avviaDraft(${currentTorneoId})">▶ Avvia draft ora</button>` : ''}
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Prepara la tua lista di preferenze qui sotto.</div>
+        ${hasFutureStart ? `
+          <div style="background:rgba(216,90,48,0.1);border:0.5px solid rgba(216,90,48,0.3);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Il draft inizia tra:</div>
+            <div id="draftCountdown" style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--clay);letter-spacing:2px">00:00:00</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">${draftStart.toLocaleString('it-IT')}</div>
+          </div>` : ''}
+        ${isAdmin ? `<div id="draftAdminBox">
+          <button class="btn btn-p" style="margin-right:8px" onclick="impostaDraftOra(${currentTorneoId})">⏰ Imposta orario</button>
+          <button class="btn btn-g" onclick="avviaDraft(${currentTorneoId})">▶ Avvia subito</button>
+        </div>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
@@ -892,6 +929,31 @@ async function renderDraft(t, isAdmin){
 
   // Attach touch drag for mobile
   setTimeout(attachTouchDrag, 200);
+  // Countdown timer per draft programmato
+  if(stato === 'upcoming' && torneo.draft_start){
+    const draftStart = new Date(torneo.draft_start);
+    if(draftStart > new Date()){
+      const countdownEl = document.getElementById('draftCountdown');
+      if(countdownEl){
+        const tick = () => {
+          const diff = draftStart - new Date();
+          if(diff <= 0){
+            // Avvia il draft automaticamente
+            avviaDraft(currentTorneoId);
+            return;
+          }
+          const h = Math.floor(diff/3600000);
+          const m = Math.floor((diff%3600000)/60000);
+          const s = Math.floor((diff%60000)/1000);
+          const el = document.getElementById('draftCountdown');
+          if(el) el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+          setTimeout(tick, 1000);
+        };
+        tick();
+      }
+    }
+  }
+
   // Poll aggiornamenti ogni 10 secondi se draft in corso
   if(stato === 'draft'){
     setTimeout(()=>{ if(document.getElementById('tContent')) renderDraft(t, isAdmin); }, 10000);
@@ -1085,11 +1147,45 @@ async function salvaPref(torneoId){
   toast('Lista salvata ✓');
 }
 
+async function impostaDraftOra(torneoId){
+  // Mostra form per impostare data/ora
+  const wrap = document.getElementById('draftAdminBox');
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <div style="background:var(--dark3);border-radius:8px;padding:12px;margin-top:10px">
+      <div style="font-size:12px;font-weight:500;margin-bottom:8px">⏰ Imposta orario di avvio</div>
+      <input type="datetime-local" id="draftDatetime" class="linput" style="margin-bottom:8px;font-size:12px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-p" onclick="salvaDraftOrario(${torneoId})">Salva orario</button>
+        <button class="btn btn-g" onclick="avviaDraftSubito(${torneoId})">▶ Avvia subito</button>
+      </div>
+    </div>`;
+  // Precompila con ora corrente + 1h
+  const d = new Date(Date.now() + 3600000);
+  const fmt = d.toISOString().slice(0,16);
+  document.getElementById('draftDatetime').value = fmt;
+}
+
+async function salvaDraftOrario(torneoId){
+  const dt = document.getElementById('draftDatetime').value;
+  if(!dt){ toast('Inserisci data e ora'); return; }
+  const startTime = new Date(dt).toISOString();
+  const {error} = await supa.from('tornei').update({ draft_start: startTime }).eq('id', torneoId);
+  if(error){ toast('Errore: '+error.message); return; }
+  const idx = allTornei.findIndex(t=>t.id===torneoId);
+  if(idx>=0) allTornei[idx].draft_start = startTime;
+  toast('Orario draft impostato ✓');
+  const t = allTornei.find(t=>t.id===torneoId);
+  renderDraft(t, true);
+}
+
+async function avviaDraftSubito(torneoId){
+  await avviaDraft(torneoId);
+}
+
 async function avviaDraft(torneoId){
-  // Ordine snake: inverso classifica (tutti a 0 → ordine random)
   const ordineBase = [...allUsers].sort(()=>Math.random()-0.5).map(u=>u.id);
   const maxGiocatori = allTornei.find(t=>t.id===torneoId)?.max_giocatori||6;
-  // Genera ordine snake completo
   const snakeOrdine = [];
   for(let g=0; g<maxGiocatori; g++){
     if(g%2===0) snakeOrdine.push(...ordineBase);
@@ -1102,9 +1198,8 @@ async function avviaDraft(torneoId){
     draft_timer_start: new Date().toISOString(),
   }).eq('id', torneoId);
   if(error){ toast('Errore avvio draft: '+error.message); return; }
-  // Aggiorna allTornei locale
   const idx = allTornei.findIndex(t=>t.id===torneoId);
-  if(idx>=0) allTornei[idx].stato='draft';
+  if(idx>=0){ allTornei[idx].stato='draft'; }
   toast('Draft avviato!');
   const t = allTornei.find(t=>t.id===torneoId);
   renderDraft(t, true);
@@ -1348,11 +1443,11 @@ function buildBracketHTML(tennisti, isAdmin, t){
         <input type="file" id="tabReplace" accept="image/*" style="display:none" onchange="processTabellone(event)">
       </button>`:''}
     </div>
-    <div style="overflow-x:auto">
-    <div style="min-width:600px">
-    <div style="display:flex;gap:0;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;padding:0 2px">
-      <div style="width:180px">1° turno</div>
-      <div style="width:180px;margin-left:10px">2° turno</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <div style="min-width:400px">
+    <div style="display:flex;gap:0;margin-bottom:6px;padding:0 2px">
+      <div style="width:175px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:rgba(216,90,48,0.7);border-radius:4px;padding:3px 0">1° TURNO</div>
+      <div style="width:175px;margin-left:10px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:rgba(41,128,185,0.7);border-radius:4px;padding:3px 0">2° TURNO</div>
     </div>`;
 
   // Bracket SVG container
@@ -1390,7 +1485,10 @@ function renderBracketSVG(tennisti){
   const totalH = slots0.length * slotStep + 20;
   const totalW = (MW + CONN) * 2 + 20;
 
-  let html = `<div style="position:relative;width:${totalW}px;height:${totalH}px">`;
+  let html = `<div style="position:relative;width:${totalW}px;height:${totalH}px">
+    <div style="position:absolute;left:0;top:0;width:${MW}px;height:100%;background:rgba(216,90,48,0.03);border-radius:6px"></div>
+    <div style="position:absolute;left:${MW+CONN}px;top:0;width:${MW}px;height:100%;background:rgba(41,128,185,0.03);border-radius:6px"></div>
+  `;
 
   // Render R1
   const mc0 = slots0.length / 2;
@@ -1493,32 +1591,50 @@ function renderProfilo(){
 }
 
 // ============================================================
-// AVATAR UPLOAD
+// AVATAR UPLOAD — salva base64 direttamente nel DB
 // ============================================================
 async function uploadAvatar(e){
   const file = e.target.files[0]; if(!file) return;
-  if(file.size > 2*1024*1024){ toast('Immagine troppo grande (max 2MB)'); return; }
+  if(file.size > 1*1024*1024){ toast('Immagine troppo grande (max 1MB)'); return; }
 
   toast('Caricamento in corso...');
-  const ext = file.name.split('.').pop();
-  const path = `avatars/${currentUser.id}_${Date.now()}.${ext}`;
 
-  // Upload su Supabase Storage
-  const { error: upErr } = await supa.storage.from('avatars').upload(path, file, {upsert:true});
-  if(upErr){ toast('Errore upload: ' + upErr.message); return; }
+  // Comprimi e converti in base64
+  const base64 = await compressImage(file, 200, 200);
 
-  const { data: urlData } = supa.storage.from('avatars').getPublicUrl(path);
-  const url = urlData.publicUrl;
+  // Salva base64 direttamente nel campo avatar_url del DB
+  const { error } = await supa.from('utenti').update({ avatar_url: base64 }).eq('id', currentUser.id);
+  if(error){ toast('Errore salvataggio: ' + error.message); return; }
 
-  // Aggiorna DB
-  await supa.from('utenti').update({ avatar_url: url }).eq('id', currentUser.id);
-  currentUser.avatar_url = url;
+  currentUser.avatar_url = base64;
   const idx = allUsers.findIndex(u=>u.id===currentUser.id);
-  if(idx>=0) allUsers[idx].avatar_url = url;
+  if(idx>=0) allUsers[idx].avatar_url = base64;
 
   updateNavUI();
   renderHome();
   toast('Foto profilo aggiornata ✓');
+}
+
+function compressImage(file, maxW, maxH){
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        // Mantieni aspect ratio
+        if(w > h){ if(w>maxW){h=Math.round(h*maxW/w);w=maxW;} }
+        else { if(h>maxH){w=Math.round(w*maxH/h);h=maxH;} }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ============================================================
@@ -1569,6 +1685,7 @@ function renderAdm(tab){
             <div class="rmeta">${t.tipo==='slam'?'Slam':'ATP 1000'} · ${t.stato}</div>
           </div>
           <span class="badge ${t.tipo==='slam'?'slam':'k1000'}">${t.tipo==='slam'?'Slam':'1000'}</span>
+          <button class="btn btn-d" style="margin-left:8px;font-size:10px" onclick="eliminaTorneo(${t.id},'${t.nome.replace(/'/g,\"\'\")}')" >✕</button>
         </div>`).join('')
       : `<div class="empty-state"><div class="empty-icon">🎾</div>Nessun torneo. Aggiungine uno!</div>`}
       <div id="addTorneoForm" style="display:none;margin-top:14px">
@@ -1641,6 +1758,16 @@ async function saveTorneo(){
   if(error){ toast('Errore: ' + error.message); return; }
   allTornei.unshift(data);
   toast('Torneo aggiunto: ' + nome + ' ✓');
+  renderAdm('tornei-adm');
+}
+
+async function eliminaTorneo(id, nome){
+  if(!confirm(`Eliminare "${nome}"? Questa azione rimuoverà anche tutti i tennisti e le squadre associate.`)) return;
+  // Elimina in cascata (FK cascade già impostato)
+  const { error } = await supa.from('tornei').delete().eq('id', id);
+  if(error){ toast('Errore eliminazione: ' + error.message); return; }
+  allTornei = allTornei.filter(t=>t.id!==id);
+  toast(`"${nome}" eliminato`);
   renderAdm('tornei-adm');
 }
 
