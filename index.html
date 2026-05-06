@@ -1302,31 +1302,41 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
     const autopickActive = localStorage.getItem(autopickKey) !== 'false';
     if(autopickActive){
       const {data:tennisti} = await supa.from('tennisti')
-        .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('seed', {nullsFirst:false});
-      const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id));
-      const target = liberi.find(t=>t.seed) || liberi[0];
+        .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('slot');
+      const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id) && t.tipo!=='bye');
+      // Prima TdS (seed non null, ordinati per seed), poi altri
+      const tds = liberi.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
+      const target = tds[0] || liberi[0];
       if(target){
-        await supa.from('squadre').insert({
+        const {error:insErr} = await supa.from('squadre').insert({
           utente_id: utenteId, torneo_id: torneoId,
           tennista_id: target.id, ordine_draft: pick+1,
         });
-        pick++;
-        const nuovoStato = pick >= draftOrdine.length ? 'completed' : 'draft';
-        await supa.from('tornei').update({
-          draft_pick_corrente: pick,
-          draft_timer_start: new Date().toISOString(),
-          stato: nuovoStato,
-        }).eq('id', torneoId);
-        if(nuovoStato === 'completed'){
-          const idx = allTornei.findIndex(t=>t.id===torneoId);
-          if(idx>=0) allTornei[idx].stato='completed';
-          toast('Draft completato!');
-          break;
+        if(!insErr){
+          pick++;
+          const nuovoStato = pick >= draftOrdine.length ? 'completed' : 'draft';
+          await supa.from('tornei').update({
+            draft_pick_corrente: pick,
+            draft_timer_start: new Date().toISOString(),
+            stato: nuovoStato,
+          }).eq('id', torneoId);
+          if(nuovoStato === 'completed'){
+            const idx = allTornei.findIndex(t=>t.id===torneoId);
+            if(idx>=0) allTornei[idx].stato='completed';
+            toast('Draft completato!');
+            break;
+          }
+          continue;
         }
-        continue;
       }
     }
-    break; // Autopick disattivato o nessun giocatore → stop
+    // Autopick disattivato, nessun giocatore disponibile, o errore → ferma il loop
+    // Se è un altro utente senza autopick, aggiorna il pick corrente e mostra UI
+    await supa.from('tornei').update({
+      draft_pick_corrente: pick,
+      draft_timer_start: new Date().toISOString(),
+    }).eq('id', torneoId);
+    break;
   }
 
   // Ricarica UI
