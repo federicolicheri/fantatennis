@@ -923,7 +923,10 @@ async function renderDraft(t, isAdmin){
             <div id="prefList" style="max-height:160px;overflow-y:auto;margin-bottom:8px">${renderPrefList(prefs||[], assegnati)}</div>
             <div style="margin-bottom:8px;display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--dark3);border-radius:7px">
               <input type="checkbox" id="autopickCheckDraft" ${getAutopick(currentTorneoId)?'checked':''} onchange="setAutopick(${currentTorneoId}, this.checked)" style="width:15px;height:15px;accent-color:var(--clay);cursor:pointer;flex-shrink:0">
-              <div style="font-size:11px;color:var(--text2)">Autopick se timer scade</div>
+              <div>
+                <div style="font-size:11px;color:var(--text)">Autopick</div>
+                <div style="font-size:10px;color:var(--text2)">Se la lista è vuota, sceglie automaticamente il miglior giocatore libero. Se attivi ora, parte subito.</div>
+              </div>
             </div>
             <div class="stitle" style="margin-bottom:6px">Giocatori disponibili — clicca per aggiungere alla lista</div>
             <input class="linput" id="searchGiocatoriDraft" placeholder="Cerca..." oninput="filterGiocatoriDraftList()" style="margin-bottom:8px;font-size:11px;padding:5px 9px">
@@ -1626,9 +1629,60 @@ function getAutopick(torneoId){
   try { return localStorage.getItem('autopick_'+torneoId+'_'+currentUser?.id) !== 'false'; } catch(e){ return true; }
 }
 
-function setAutopick(torneoId, val){
+async function setAutopick(torneoId, val){
   try { localStorage.setItem('autopick_'+torneoId+'_'+currentUser?.id, val ? 'true' : 'false'); } catch(e){}
-  toast(val ? 'Autopick attivato' : 'Autopick disattivato');
+  if(val){
+    // Se è il mio turno, controlla se la lista è vuota e parti subito
+    const {data:torneo} = await supa.from('tornei').select('*').eq('id',torneoId).single();
+    if(torneo && torneo.stato==='draft'){
+      const draftOrdine = torneo.draft_ordine||[];
+      const pickCorrente = torneo.draft_pick_corrente||0;
+      if(draftOrdine[pickCorrente] === currentUser.id){
+        // È il mio turno — controlla se ho preferenze disponibili
+        const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id',torneoId);
+        const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
+        const {data:prefs} = await supa.from('draft_preferenze').select('tennista_id').eq('torneo_id',torneoId).eq('utente_id',currentUser.id).order('ordine');
+        const primoDisp = (prefs||[]).find(p=>!assegnati.has(p.tennista_id));
+        if(!primoDisp){
+          // Lista vuota → parte subito autopick
+          toast('Autopick attivato — scelgo subito!');
+          await autoAssegna(torneoId, pickCorrente, draftOrdine);
+          return;
+        }
+      }
+    }
+    toast('Autopick attivato');
+  } else {
+    toast('Autopick disattivato — sceglierai tu');
+  }
+}
+
+async function autoAssegna(torneoId, pickCorrente, draftOrdine){
+  const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id',torneoId);
+  const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
+  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
+  const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id));
+  const tds = liberi.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
+  const target = tds[0] || liberi[0];
+  if(!target){ toast('Nessun giocatore disponibile'); return; }
+  const {error} = await supa.from('squadre').insert({
+    utente_id: currentUser.id, torneo_id: torneoId,
+    tennista_id: target.id, ordine_draft: pickCorrente+1,
+  });
+  if(error){ toast('Errore: '+error.message); return; }
+  const nuovoPick = pickCorrente+1;
+  const nuovoStato = nuovoPick >= draftOrdine.length ? 'completed' : 'draft';
+  await supa.from('tornei').update({
+    draft_pick_corrente: nuovoPick,
+    draft_timer_start: new Date().toISOString(),
+    stato: nuovoStato,
+  }).eq('id', torneoId);
+  if(nuovoStato==='completed'){
+    const idx=allTornei.findIndex(t=>t.id===torneoId);
+    if(idx>=0) allTornei[idx].stato='completed';
+    toast('Draft completato!');
+  }
+  await processAllAutoPicks(torneoId, nuovoPick, draftOrdine);
 }
 
 function avviaTimer(startTime){
