@@ -806,6 +806,7 @@ async function renderDraft(t, isAdmin){
   window._tennisti = tennisti||[];
   window._prefs = prefs||[];
   window._assegnati = assegnati;
+  window._squadre = squadre||[];
 
   // Mia squadra
   const miaSq = (squadre||[]).filter(s => s.utente_id === currentUser.id);
@@ -900,35 +901,33 @@ async function renderDraft(t, isAdmin){
         <!-- DESTRA: selezione giocatore + prefs -->
         <div>
           ${isMioTurno && miaSq.length < maxGiocatori ? `
-          <div style="background:rgba(216,90,48,0.08);border:0.5px solid rgba(216,90,48,0.3);border-radius:8px;padding:12px;margin-bottom:10px">
-            <div style="font-size:12px;font-weight:500;color:var(--clay);margin-bottom:8px">🎾 È il tuo turno! Scegli un giocatore</div>
-            <input class="linput" id="searchGiocatori" placeholder="Cerca giocatore..." oninput="filterGiocatori()" style="margin-bottom:8px;font-size:11px;padding:6px 10px">
-            <div id="giocatoriList" style="max-height:280px;overflow-y:auto">${renderGiocatoriListDraft(tennisti||[], assegnati, currentTorneoId)}</div>
+          <div style="background:rgba(216,90,48,0.08);border:0.5px solid rgba(216,90,48,0.3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+            <div style="font-size:12px;font-weight:500;color:var(--clay)">🎾 È il tuo turno!</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">Aggiorna la lista preferenze qui sotto e salva. Il sistema sceglierà automaticamente il primo disponibile.</div>
+            ${torneo.draft_timer_start ? `<div id="timerBox" style="font-size:11px;color:var(--yellow);margin-top:4px">⏱ Timer: 30:00</div>` : ''}
           </div>` : `
           <div>
-            <div class="stitle">Giocatori già scelti</div>
-            ${(squadre||[]).map(s=>`<div class="rr" style="margin-bottom:3px;padding:6px 10px">
-              <div class="rav" style="width:22px;height:22px;background:${allUsers.find(u=>u.id===s.utente_id)?.color||'#D85A30'};font-size:8px">${allUsers.find(u=>u.id===s.utente_id)?.initials||'?'}</div>
+            <div class="stitle">La mia squadra (${miaSq.length}/${maxGiocatori})</div>
+            ${miaSq.map(s=>`<div class="rr" style="margin-bottom:3px;padding:6px 10px">
               <div style="font-size:11px;flex:1">${s.tennisti?.flag||''} ${s.tennisti?.nome||'—'}</div>
               ${s.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 4px">${s.tennisti.seed}</span>`:''}
             </div>`).join('')}
           </div>`}
 
-          <!-- LISTA PREFERENZE modificabile anche durante il draft -->
+          <!-- LISTA PREFERENZE + TABELLONE durante il draft -->
           <div style="margin-top:10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <div class="stitle" style="margin:0">La mia lista preferenze</div>
-              <button class="btn btn-g" style="font-size:10px" onclick="salvaPref(${currentTorneoId})">💾 Salva</button>
+              <button class="btn btn-p" style="font-size:10px" onclick="salvaPrefEriprendi(${currentTorneoId})">💾 Salva e riprendi</button>
             </div>
-            <div id="prefList" style="max-height:200px;overflow-y:auto;margin-bottom:8px">${renderPrefList(prefs||[], assegnati)}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              <input class="linput" id="searchPrefGiocatori" placeholder="Aggiungi giocatore..." oninput="filterPrefGiocatori()" style="font-size:11px;padding:5px 9px">
-            </div>
-            <div id="prefGiocatoriList" style="max-height:150px;overflow-y:auto;display:none"></div>
-            <div style="margin-top:8px;display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--dark3);border-radius:7px">
+            <div id="prefList" style="max-height:160px;overflow-y:auto;margin-bottom:8px">${renderPrefList(prefs||[], assegnati)}</div>
+            <div style="margin-bottom:8px;display:flex;align-items:center;gap:7px;padding:8px 10px;background:var(--dark3);border-radius:7px">
               <input type="checkbox" id="autopickCheckDraft" ${getAutopick(currentTorneoId)?'checked':''} onchange="setAutopick(${currentTorneoId}, this.checked)" style="width:15px;height:15px;accent-color:var(--clay);cursor:pointer;flex-shrink:0">
-              <div style="font-size:11px;color:var(--text2)">Autopick se lista finisce</div>
+              <div style="font-size:11px;color:var(--text2)">Autopick se timer scade</div>
             </div>
+            <div class="stitle" style="margin-bottom:6px">Giocatori disponibili — clicca per aggiungere alla lista</div>
+            <input class="linput" id="searchGiocatoriDraft" placeholder="Cerca..." oninput="filterGiocatoriDraftList()" style="margin-bottom:8px;font-size:11px;padding:5px 9px">
+            <div id="giocatoriDraftList" style="max-height:300px;overflow-y:auto">${renderTabelloneDraft(tennisti||[], assegnati, squadre||[])}</div>
           </div>
         </div>
       </div>`;
@@ -1009,6 +1008,78 @@ async function renderDraft(t, isAdmin){
 }
 
 let _dragSrcIdx = null;
+
+// Tabellone visivo durante il draft — giocatori già presi in grigio con sigla
+function renderTabelloneDraft(tennisti, assegnati, squadre){
+  const prefs = window._prefs||[];
+  const prefIds = new Set(prefs.map(p=>p.tennista_id));
+  // Mappa tennista_id → iniziali utente che lo ha scelto
+  const takenBy = {};
+  squadre.forEach(s => {
+    if(s.tennista_id && s.utente_id){
+      const u = allUsers.find(u=>u.id===s.utente_id);
+      takenBy[s.tennista_id] = u?.initials||'?';
+    }
+  });
+  // Raggruppa per match (coppie di slot)
+  const bySlot = {};
+  tennisti.forEach(t => bySlot[t.slot] = t);
+  const maxSlot = Math.max(...tennisti.map(t=>t.slot), 0);
+  let html = '';
+  for(let i=1; i<=maxSlot; i+=2){
+    const a = bySlot[i];
+    const b = bySlot[i+1];
+    if(!a && !b) continue;
+    const matchIdx = Math.floor((i-1)/2);
+    const colors = ['rgba(216,90,48,0.07)','rgba(41,128,185,0.07)','rgba(39,174,96,0.07)','rgba(243,156,18,0.07)'];
+    const borders = ['rgba(216,90,48,0.25)','rgba(41,128,185,0.25)','rgba(39,174,96,0.25)','rgba(243,156,18,0.25)'];
+    const ci = matchIdx % 4;
+    html += `<div style="border:1px solid ${borders[ci]};border-radius:5px;background:${colors[ci]};overflow:hidden;margin-bottom:3px">
+      ${draftPlayerRow(a, assegnati, takenBy, prefIds)}
+      ${draftPlayerRow(b, assegnati, takenBy, prefIds)}
+    </div>`;
+  }
+  return html || '<div style="font-size:11px;color:var(--text2)">Nessun giocatore</div>';
+}
+
+function draftPlayerRow(p, assegnati, takenBy, prefIds){
+  if(!p) return '';
+  const isBye = p.tipo==='bye';
+  const isTaken = assegnati.has(p.id);
+  const inPrefs = prefIds.has(p.id);
+  const takenByInitials = takenBy[p.id];
+  if(isBye) return `<div style="padding:3px 8px;font-size:10px;color:var(--text2);min-height:22px;border-bottom:0.5px solid var(--border)">(Bye)</div>`;
+  const onclick = !isTaken && !inPrefs ? `onclick="aggiungiPref(${p.id})"` : '';
+  const cursor = !isTaken && !inPrefs ? 'cursor:pointer' : 'cursor:default';
+  const opacity = isTaken ? 'opacity:0.4' : '';
+  const bg = isTaken ? 'background:var(--dark3)' : '';
+  return `<div ${onclick} style="display:flex;align-items:center;gap:5px;padding:3px 8px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${cursor};${opacity};${bg};transition:background 0.1s"
+    ${!isTaken && !inPrefs ? 'onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background=''"' : ''}>
+    ${p.flag?`<span style="font-size:9px;flex-shrink:0">${p.flag}</span>`:''}
+    <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isTaken?'var(--text2)':'var(--text)'}">${p.nome||'—'}</span>
+    ${p.seed?`<span style="font-size:8px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>`:''}
+    ${isTaken?`<span style="font-size:9px;font-weight:600;color:var(--text2);flex-shrink:0">${takenByInitials}</span>`:''}
+    ${inPrefs&&!isTaken?`<span style="font-size:9px;color:var(--clay);flex-shrink:0">✓</span>`:''}
+  </div>`;
+}
+
+function filterGiocatoriDraftList(){
+  const q = document.getElementById('searchGiocatoriDraft')?.value.toLowerCase()||'';
+  const items = document.querySelectorAll('#giocatoriDraftList > div');
+  if(!q){ items.forEach(el=>el.style.display=''); return; }
+  items.forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function salvaPrefEriprendi(torneoId){
+  await salvaPref(torneoId);
+  // Dopo aver salvato, riprendi il processo auto-pick
+  const {data:torneo} = await supa.from('tornei').select('*').eq('id',torneoId).single();
+  if(torneo && torneo.stato==='draft'){
+    await processAllAutoPicks(torneoId, torneo.draft_pick_corrente||0, torneo.draft_ordine||[]);
+  }
+}
 
 function renderPrefList(prefs, assegnati){
   if(!prefs.length) return '<div style="font-size:11px;color:var(--text2);padding:8px 0">Aggiungi giocatori dalla lista →</div>';
@@ -1189,13 +1260,20 @@ function filterPrefGiocatori(){
 async function aggiungiPref(tennista_id){
   const t = window._tennisti?.find(t=>t.id===tennista_id);
   if(!t) return;
-  // Aggiungi alla lista locale
-  const ordine = (window._prefs?.length||0) + 1;
   window._prefs = window._prefs || [];
+  // Evita duplicati
+  if(window._prefs.find(p=>p.tennista_id===tennista_id)) return;
+  const ordine = (window._prefs.length) + 1;
   window._prefs.push({tennista_id, ordine, tennisti: t});
-  // Refresh UI
-  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
-  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  // Refresh lista preferenze
+  const prefListEl = document.getElementById('prefList');
+  if(prefListEl) prefListEl.innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+  // Refresh lista giocatori (pre-draft)
+  const giocEl = document.getElementById('giocatoriList');
+  if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  // Refresh tabellone draft (in-draft)
+  const draftEl = document.getElementById('giocatoriDraftList');
+  if(draftEl) draftEl.innerHTML = renderTabelloneDraft(window._tennisti||[], window._assegnati||new Set(), window._squadre||[]);
   setTimeout(attachTouchDrag, 50);
 }
 
