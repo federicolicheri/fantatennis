@@ -2232,16 +2232,26 @@ async function calcolaPuntiFanta(torneoId){
   if(!tennisti||!squadre) return;
 
   const byId = {};
-  tennisti.forEach(t => byId[t.id] = t);
+  const bySlot = {};
+  tennisti.forEach(t => { byId[t.id] = t; bySlot[t.slot] = t; });
 
   // Calcola turno massimo raggiunto per ogni tennista
   const turnoMax = {}; // tennista_id → turno massimo
   tennisti.forEach(t => {
-    if(t.tipo === 'bye'){
-      // Bye → partono dal 2° turno → 45 pt
+    if(t.tipo === 'bye') return; // i bye non sono in squadra
+    
+    // Controlla se il giocatore ha un bye nello slot adiacente
+    // Gli slot vanno a coppie: (1,2), (3,4), (5,6)...
+    // Se slot è dispari, il partner è slot+1; se pari, il partner è slot-1
+    const partnerSlot = t.slot % 2 === 1 ? t.slot + 1 : t.slot - 1;
+    const partner = bySlot[partnerSlot];
+    const hasBye = partner && partner.tipo === 'bye';
+    
+    if(hasBye){
+      // Ha il bye → parte dal 2° turno → 45 pt
       turnoMax[t.id] = 2;
-    } else if(t.tipo === 'p' || t.tipo === 's' || t.tipo === 'q'){
-      // Hanno giocato il 1° turno → almeno 10 pt
+    } else {
+      // Gioca il 1° turno → almeno 10 pt
       turnoMax[t.id] = 1;
     }
   });
