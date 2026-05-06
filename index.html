@@ -1523,7 +1523,7 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
       if(myAutopick){
         // Autopick attivo → assegna automaticamente
         const {data:tennisti2} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
-        const liberi2 = (tennisti2||[]).filter(t=>!assegnati.has(t.id)&&t.tipo!=='bye');
+        const liberi2 = (tennisti2||[]).filter(t=>!assegnati.has(t.id)&&t.tipo!=='bye'&&t.tipo!=='q');
         const tds2 = liberi2.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
         const target2 = tds2[0]||liberi2[0];
         if(target2){
@@ -1555,7 +1555,7 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
     if(autopickActive){
       const {data:tennisti} = await supa.from('tennisti')
         .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('slot');
-      const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id) && t.tipo!=='bye');
+      const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id) && t.tipo!=='bye' && t.tipo!=='q');
       // Prima TdS (seed non null, ordinati per seed), poi altri
       const tds = liberi.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
       const target = tds[0] || liberi[0];
@@ -1719,7 +1719,7 @@ async function autoAssegna(torneoId, pickCorrente, draftOrdine){
   const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id',torneoId);
   const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
   const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
-  const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id));
+  const liberi = (tennisti||[]).filter(t=>!assegnati.has(t.id) && t.tipo!=='bye' && t.tipo!=='q');
   const tds = liberi.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
   const target = tds[0] || liberi[0];
   if(!target){ toast('Nessun giocatore disponibile'); return; }
