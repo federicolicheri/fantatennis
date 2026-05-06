@@ -1414,6 +1414,11 @@ async function scegli(tennista_id, torneoId){
 
   if(draftOrdine[pickCorrente] !== currentUser.id){ toast('Non è il tuo turno!'); return; }
 
+  // Verifica non abbia già il massimo
+  const maxGioc = allTornei.find(t=>t.id===torneoId)?.max_giocatori||6;
+  const {data:miaSquadra} = await supa.from('squadre').select('id').eq('torneo_id',torneoId).eq('utente_id',currentUser.id);
+  if((miaSquadra||[]).length >= maxGioc){ toast('Hai già il massimo di giocatori!'); return; }
+
   // Inserisci in squadre
   const {error} = await supa.from('squadre').insert({
     utente_id: currentUser.id, torneo_id: torneoId,
@@ -1447,13 +1452,23 @@ async function scegli(tennista_id, torneoId){
 // Processa TUTTI i pick in sequenza incluso l'utente corrente se ha lista
 async function processAllAutoPicks(torneoId, startPick, draftOrdine){
   let pick = startPick;
+  const maxGiocatori = allTornei.find(t=>t.id===torneoId)?.max_giocatori || 6;
 
   while(pick < draftOrdine.length){
     const utenteId = draftOrdine[pick];
 
     // Carica giocatori già assegnati
-    const {data:squadre} = await supa.from('squadre').select('tennista_id').eq('torneo_id', torneoId);
+    const {data:squadre} = await supa.from('squadre').select('tennista_id, utente_id').eq('torneo_id', torneoId);
     const assegnati = new Set((squadre||[]).map(s=>s.tennista_id));
+
+    // Controlla se questo utente ha già raggiunto il massimo giocatori
+    const giaHa = (squadre||[]).filter(s=>s.utente_id===utenteId).length;
+    if(giaHa >= maxGiocatori){
+      // Utente completo — salta al prossimo
+      pick++;
+      await supa.from('tornei').update({draft_pick_corrente: pick, draft_timer_start: new Date().toISOString()}).eq('id', torneoId);
+      continue;
+    }
 
     // Carica preferenze dell'utente di turno
     const {data:prefs} = await supa.from('draft_preferenze')
