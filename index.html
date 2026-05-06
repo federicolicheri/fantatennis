@@ -2172,6 +2172,90 @@ function playerRowHTML(p){
 }
 
 // ============================================================
+// CALCOLO PUNTI FANTA
+// ============================================================
+const PUNTI_M1000 = {1:10, 2:45, 3:90, 4:180, 5:360, 6:600, 7:1000};
+const PUNTI_SLAM  = {1:10, 2:45, 3:90, 4:180, 5:360, 6:720, 7:1200, 8:2000};
+const BONUS_UPSET = 50;
+
+async function calcolaPuntiFanta(torneoId){
+  const torneo = allTornei.find(t=>t.id===torneoId);
+  if(!torneo) return;
+  const isSlam = torneo.tipo === 'slam';
+  const PUNTI = isSlam ? PUNTI_SLAM : PUNTI_M1000;
+
+  // Carica tutto
+  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId);
+  const {data:risultati} = await supa.from('risultati').select('*').eq('torneo_id',torneoId);
+  const {data:squadre} = await supa.from('squadre').select('*').eq('torneo_id',torneoId);
+
+  if(!tennisti||!squadre) return;
+
+  const byId = {};
+  tennisti.forEach(t => byId[t.id] = t);
+
+  // Calcola turno massimo raggiunto per ogni tennista
+  const turnoMax = {}; // tennista_id → turno massimo
+  tennisti.forEach(t => {
+    if(t.tipo === 'bye'){
+      // Bye → partono dal 2° turno → 45 pt
+      turnoMax[t.id] = 2;
+    } else if(t.tipo === 'p' || t.tipo === 's' || t.tipo === 'q'){
+      // Hanno giocato il 1° turno → almeno 10 pt
+      turnoMax[t.id] = 1;
+    }
+  });
+
+  // Aggiorna con i risultati
+  (risultati||[]).forEach(r => {
+    // Vincitore avanza al turno successivo
+    const turnoVincitore = r.turno + 1;
+    if(!turnoMax[r.tennista_vincitore_id] || turnoMax[r.tennista_vincitore_id] < turnoVincitore){
+      turnoMax[r.tennista_vincitore_id] = turnoVincitore;
+    }
+  });
+
+  // Calcola punti per ogni squadra
+  const puntiBySq = {}; // utente_id → {base, bonus, totale}
+  allUsers.forEach(u => puntiBySq[u.id] = {base:0, bonus:0, totale:0});
+
+  squadre.forEach(s => {
+    const turno = turnoMax[s.tennista_id] || 0;
+    const puntiBase = PUNTI[turno] || 0;
+
+    // Bonus upset: controlla se ha vinto come non-TdS contro TdS
+    let puntiBonus = 0;
+    (risultati||[]).forEach(r => {
+      if(r.tennista_vincitore_id === s.tennista_id && r.is_upset){
+        puntiBonus += BONUS_UPSET;
+      }
+    });
+
+    if(puntiBySq[s.utente_id]){
+      puntiBySq[s.utente_id].base += puntiBase;
+      puntiBySq[s.utente_id].bonus += puntiBonus;
+      puntiBySq[s.utente_id].totale += puntiBase + puntiBonus;
+    }
+  });
+
+  // Salva in classifica (upsert)
+  const rows = allUsers.map(u => ({
+    utente_id: u.id,
+    torneo_id: torneoId,
+    punti: puntiBySq[u.id]?.totale || 0,
+  }));
+
+  // Upsert uno alla volta per evitare conflitti
+  for(const row of rows){
+    await supa.from('classifica').upsert(row, {onConflict:'utente_id,torneo_id'});
+  }
+
+  toast('Punti aggiornati ✓');
+  return puntiBySq;
+}
+
+
+// ============================================================
 // CLASSIFICA
 // ============================================================
 async function renderClass(tab){
@@ -2349,7 +2433,10 @@ function renderAdm(tab){
     wrap.innerHTML = `<div class="empty-state">
       <div class="empty-icon">📸</div>
       Carica uno screenshot dei risultati per aggiornare il bracket e i punti fanta.<br><br>
-      <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
+        <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti</button>
+      </div>
     </div>`;
   }
 }
@@ -2394,6 +2481,19 @@ async function eliminaTorneo(id){
   allTornei = allTornei.filter(t=>t.id!==id);
   toast('"' + nome + '" eliminato');
   renderAdm('tornei-adm');
+}
+
+async function ricalcolaPuntiAdmin(){
+  // Ricalcola per tutti i tornei con draft completato
+  const torneiCompletati = allTornei.filter(t => t.stato === 'draft' || t.stato === 'completed' || t.stato === 'live');
+  if(!torneiCompletati.length){ toast('Nessun torneo attivo'); return; }
+  toast('Ricalcolo in corso...');
+  for(const t of torneiCompletati){
+    await calcolaPuntiFanta(t.id);
+  }
+  // Aggiorna classifica in home
+  classifica = [];
+  renderHome();
 }
 
 async function resetPwd(uid, nick){
