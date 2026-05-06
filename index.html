@@ -1054,7 +1054,7 @@ function draftPlayerRow(p, assegnati, takenBy, prefIds){
   const opacity = isTaken ? 'opacity:0.4' : '';
   const bg = isTaken ? 'background:var(--dark3)' : '';
   return `<div ${onclick} style="display:flex;align-items:center;gap:5px;padding:3px 8px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${cursor};${opacity};${bg};transition:background 0.1s"
-    ${!isTaken && !inPrefs ? 'onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background=''"' : ''}>
+    ${!isTaken && !inPrefs ? 'onmouseover="this.style.opacity=0.7" onmouseout="this.style.opacity=1"' : ''}>
     ${p.flag?`<span style="font-size:9px;flex-shrink:0">${p.flag}</span>`:''}
     <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isTaken?'var(--text2)':'var(--text)'}">${p.nome||'—'}</span>
     ${p.seed?`<span style="font-size:8px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>`:''}
