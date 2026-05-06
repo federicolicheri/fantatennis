@@ -1431,102 +1431,157 @@ async function saveTabellone(players){
 }
 
 function buildBracketHTML(tennisti, isAdmin, t){
-  const bySlot = {};
-  tennisti.forEach(p => bySlot[p.slot] = p);
-  const maxSlot = Math.max(...tennisti.map(p=>p.slot));
+  const ROUND_NAMES = ['1° Turno','2° Turno','3° Turno','Quarti','Semifinali','Finale'];
+  const ROUND_COLORS = ['#D85A30','#2980B9','#27AE60','#8E44AD','#F39C12','#E74C3C'];
+  const currentRound = parseInt(localStorage.getItem('bracket_round_' + currentTorneoId) || '0');
 
-  // Header
   let html = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="font-size:11px;color:var(--text2)">${tennisti.filter(p=>p.tipo!=='bye').length} giocatori · ${tennisti.filter(p=>p.tipo==='s').length} TdS · ${tennisti.filter(p=>p.tipo==='q').length} Qualifier</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text2)">${tennisti.filter(p=>p.tipo!=='bye').length} giocatori · ${tennisti.filter(p=>p.tipo==='s').length} TdS</div>
       ${isAdmin?`<button class="btn btn-g" onclick="document.getElementById('tabReplace').click()" style="font-size:10px">↺ Sostituisci
         <input type="file" id="tabReplace" accept="image/*" style="display:none" onchange="processTabellone(event)">
       </button>`:''}
     </div>
+    <div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+      ${ROUND_NAMES.map((name,i) => `
+        <button onclick="setRound(${i})" style="padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid ${i===currentRound?ROUND_COLORS[i]:'var(--border2)'};background:${i===currentRound?`${ROUND_COLORS[i]}22`:'transparent'};color:${i===currentRound?ROUND_COLORS[i]:'var(--text2)'};white-space:nowrap;flex-shrink:0">${name}</button>
+      `).join('')}
+    </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <div style="min-width:400px">
-    <div style="display:flex;gap:0;margin-bottom:6px;padding:0 2px">
-      <div style="width:175px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:rgba(216,90,48,0.7);border-radius:4px;padding:3px 0">1° TURNO</div>
-      <div style="width:175px;margin-left:10px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:rgba(41,128,185,0.7);border-radius:4px;padding:3px 0">2° TURNO</div>
+      <div id="bracketContainer" style="position:relative"></div>
     </div>`;
-
-  // Bracket SVG container
-  html += `<div id="bracketContainer" style="position:relative"></div>`;
-  html += `</div></div>`;
   return html;
 }
 
+let _currentBracketRound = 0;
+let _bracketTennisti = [];
+
+function setRound(round){
+  localStorage.setItem('bracket_round_' + currentTorneoId, round);
+  _currentBracketRound = round;
+  renderBracketSVG(_bracketTennisti);
+}
+
 function renderBracketSVG(tennisti){
+  _bracketTennisti = tennisti;
+  _currentBracketRound = parseInt(localStorage.getItem('bracket_round_' + currentTorneoId) || '0');
   const container = document.getElementById('bracketContainer');
   if(!container) return;
 
-  const MW = 170, CONN = 10, ROW_H = 22, MATCH_H = ROW_H * 2, MB = 4;
+  const MW = 160, CONN = 14, ROW_H = 22, MATCH_H = ROW_H * 2, MB = 4;
   const slotStep = (MATCH_H + MB) / 2;
 
-  // Slot array
+  const ROUND_COLORS = ['#D85A30','#2980B9','#27AE60','#8E44AD','#F39C12','#E74C3C'];
+  const MATCH_COLORS = [
+    ['rgba(216,90,48,0.08)','rgba(41,128,185,0.08)','rgba(39,174,96,0.08)','rgba(243,156,18,0.08)'],
+  ];
+
+  // Build all slots from round 0
   const bySlot = {};
   tennisti.forEach(p => bySlot[p.slot] = p);
   const maxSlot = Math.max(...tennisti.map(p=>p.slot));
   const slots0 = [];
-  for(let i=1; i<=maxSlot; i++) slots0.push(bySlot[i] || {slot:i, nome:'—', tipo:'bye', seed:null, flag:null});
+  for(let i=1; i<=maxSlot; i++) slots0.push(bySlot[i] || {slot:i, nome:'Bye', tipo:'bye', seed:null, flag:null});
 
-  // Calcola R2
-  function winner(top, bot){
-    if(!top || top.tipo==='bye') return bot;
-    if(!bot || bot.tipo==='bye') return top;
-    return null; // TBD
-  }
-  const slots1 = [];
-  for(let i=0; i<slots0.length; i+=4){
-    slots1.push(winner(slots0[i], slots0[i+1]));
-    slots1.push(winner(slots0[i+2], slots0[i+3]));
+  // Build all rounds
+  function winnerSlot(top, bot){
+    if(!top || top.tipo==='bye') return bot ? {...bot, _fromBye:true} : null;
+    if(!bot || bot.tipo==='bye') return top ? {...top, _fromBye:true} : null;
+    // Check if there's a result stored
+    if(top.vincitore) return {...top, _score: top.score};
+    if(bot.vincitore) return {...bot, _score: bot.score};
+    return {tipo:'tbd', nome:'—', seed:null, flag:null};
   }
 
-  const totalH = slots0.length * slotStep + 20;
-  const totalW = (MW + CONN) * 2 + 20;
+  function buildNextSlots(prev){
+    const next = [];
+    for(let i=0; i<prev.length; i+=4){
+      next.push(winnerSlot(prev[i], prev[i+1]));
+      next.push(winnerSlot(prev[i+2], prev[i+3]));
+    }
+    return next;
+  }
 
-  let html = `<div style="position:relative;width:${totalW}px;height:${totalH}px">
-    <div style="position:absolute;left:0;top:0;width:${MW}px;height:100%;background:rgba(216,90,48,0.03);border-radius:6px"></div>
-    <div style="position:absolute;left:${MW+CONN}px;top:0;width:${MW}px;height:100%;background:rgba(41,128,185,0.03);border-radius:6px"></div>
-  `;
+  const allRoundSlots = [slots0];
+  let cur = slots0;
+  for(let r=0; r<5; r++){
+    cur = buildNextSlots(cur);
+    allRoundSlots.push(cur);
+  }
 
-  // Render R1
-  const mc0 = slots0.length / 2;
-  for(let mi=0; mi<mc0; mi++){
-    const top = slots0[mi*2];
-    const bot = slots0[mi*2+1];
-    const cA = (mi*2 + 0.5) * slotStep;
-    const cB = (mi*2 + 1.5) * slotStep;
-    const midY = (cA+cB)/2;
-    const matchTop = Math.round(midY - MATCH_H/2);
+  const round = _currentBracketRound;
+  const currentSlots = allRoundSlots[round] || slots0;
+  const nextSlots = allRoundSlots[round+1] || null;
 
-    html += `<div style="position:absolute;left:0;top:${matchTop}px;width:${MW}px;border:0.5px solid var(--border);border-radius:4px;background:var(--card);overflow:hidden">
-      ${playerRowHTML(top)}${playerRowHTML(bot)}
+  // Calculate heights
+  // Each match in current round occupies 2 slots vertically
+  const mc = currentSlots.length / 2;
+  const totalH = currentSlots.length * slotStep + 20;
+  const totalW = nextSlots ? (MW + CONN + MW + 20) : (MW + 20);
+
+  const RCOL = ROUND_COLORS[round] || '#D85A30';
+
+  let html = `<div style="position:relative;width:${totalW}px;height:${totalH}px">`;
+
+  // Current round header
+  html += `<div style="position:absolute;left:0;top:-22px;width:${MW}px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:${RCOL}bb;border-radius:4px;padding:2px 0">${['1° TURNO','2° TURNO','3° TURNO','QUARTI','SEMIFINALI','FINALE'][round]}</div>`;
+
+  if(nextSlots){
+    const NCOL = ROUND_COLORS[round+1] || '#2980B9';
+    html += `<div style="position:absolute;left:${MW+CONN}px;top:-22px;width:${MW}px;text-align:center;font-size:10px;font-weight:500;color:#fff;background:${NCOL}bb;border-radius:4px;padding:2px 0">PREVIEW ${['2° TURNO','3° TURNO','QUARTI','SEMIFINALI','FINALE','—'][round]}</div>`;
+  }
+
+  // Render current round matches (compatti, uno dopo l'altro)
+  const altColors = [
+    `rgba(216,90,48,0.07)`, `rgba(41,128,185,0.07)`,
+    `rgba(39,174,96,0.07)`, `rgba(243,156,18,0.07)`
+  ];
+  const altBorders = [
+    `rgba(216,90,48,0.3)`, `rgba(41,128,185,0.3)`,
+    `rgba(39,174,96,0.3)`, `rgba(243,156,18,0.3)`
+  ];
+
+  for(let mi=0; mi<mc; mi++){
+    const slA = currentSlots[mi*2];
+    const slB = currentSlots[mi*2+1];
+    const top = Math.round((mi*2) * slotStep);
+    const cidx = mi % 4;
+
+    html += `<div style="position:absolute;left:0;top:${top}px;width:${MW}px;border:1px solid ${altBorders[cidx]};border-radius:5px;background:${altColors[cidx]};overflow:hidden">
+      ${playerRowHTML(slA)}${playerRowHTML(slB)}
     </div>`;
   }
 
-  // Render R2
-  // Ogni match R2 (indice mi) copre 4 slot R1: (mi*4, mi*4+1, mi*4+2, mi*4+3)
-  // Il centro Y del match R2 = media dei centri dei 2 match R1 che lo producono
-  const mc1 = slots1.length / 2;
-  for(let mi=0; mi<mc1; mi++){
-    // Centri dei 4 slot R1 coinvolti
-    const c0 = (mi*4 + 0.5) * slotStep;
-    const c1 = (mi*4 + 1.5) * slotStep;
-    const c2 = (mi*4 + 2.5) * slotStep;
-    const c3 = (mi*4 + 3.5) * slotStep;
-    // Centro dei due match R1
-    const centerM0 = (c0 + c1) / 2;
-    const centerM1 = (c2 + c3) / 2;
-    // Centro del match R2
-    const midY = (centerM0 + centerM1) / 2;
-    const matchTop = Math.round(midY - MATCH_H/2);
-    const p1 = slots1[mi*2];
-    const p2 = slots1[mi*2+1];
+  // Render next round preview (centrata tra i 2 match che la alimentano)
+  if(nextSlots){
+    const nmc = nextSlots.length / 2;
+    for(let mi=0; mi<nmc; mi++){
+      // Questo match preview è centrato tra i match current[mi*2] e current[mi*2+1]
+      // Ogni match current occupa MATCH_H px
+      // Match current[mi*2] inizia a: mi*2*2*slotStep = mi*4*slotStep
+      // Match current[mi*2+1] inizia a: (mi*4+2)*slotStep
+      const topA = (mi*4) * slotStep;       // top del match current superiore
+      const botA = topA + MATCH_H;           // bottom del match current superiore
+      const topB = (mi*4+2) * slotStep;     // top del match current inferiore  
+      const botB = topB + MATCH_H;           // bottom del match current inferiore
+      const centerY = (botA + topB) / 2;    // centro tra i due match
+      const matchTop = Math.round(centerY - MATCH_H/2);
 
-    html += `<div style="position:absolute;left:${MW+CONN}px;top:${matchTop}px;width:${MW}px;border:0.5px solid var(--border);border-radius:4px;background:var(--card);overflow:hidden">
-      ${playerRowHTML(p1)}${playerRowHTML(p2)}
-    </div>`;
+      const p1 = nextSlots[mi*2];
+      const p2 = nextSlots[mi*2+1];
+
+      html += `<div style="position:absolute;left:${MW+CONN}px;top:${matchTop}px;width:${MW}px;border:0.5px solid var(--border2);border-radius:5px;background:var(--card);overflow:hidden;opacity:0.85">
+        ${playerRowHTML(p1)}${playerRowHTML(p2)}
+      </div>`;
+
+      // Connector lines
+      const matchMidLeft = topA + MATCH_H/2;
+      const matchMidRight = centerY;
+      html += `<svg style="position:absolute;left:${MW}px;top:0;pointer-events:none" width="${CONN}" height="${totalH}" overflow="visible">
+        <path d="M0,${matchMidLeft} L${CONN/2},${matchMidLeft} L${CONN/2},${matchMidRight} L${CONN},${matchMidRight}" stroke="var(--border2)" stroke-width="1" fill="none"/>
+        <path d="M0,${(mi*4+2)*slotStep+MATCH_H/2} L${CONN/2},${(mi*4+2)*slotStep+MATCH_H/2} L${CONN/2},${matchMidRight} L${CONN},${matchMidRight}" stroke="var(--border2)" stroke-width="1" fill="none"/>
+      </svg>`;
+    }
   }
 
   html += `</div>`;
@@ -1537,13 +1592,15 @@ function playerRowHTML(p){
   if(!p) return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);color:var(--text2)"><span>—</span></div>`;
   const isBye = p.tipo==='bye';
   const isQ = p.tipo==='q';
+  const isTbd = p.tipo==='tbd';
   const bg = isBye ? 'background:var(--dark3)' : '';
-  const col = isBye||isQ ? 'color:var(--text2)' : 'color:var(--text)';
+  const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : 'color:var(--text)';
   const seedHTML = p.seed ? `<span style="font-size:8px;color:#fff;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : '';
   const flagHTML = p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : '';
-  const name = isBye ? '(Bye)' : isQ ? 'Qualifier' : (p.nome||'—');
+  const scoreHTML = p._score ? `<span style="font-size:9px;color:var(--green);margin-left:2px;flex-shrink:0">${p._score}</span>` : '';
+  const name = isBye ? '(Bye)' : isQ ? 'Qualifier' : isTbd ? '—' : (p.nome||'—');
   return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);${bg};${col}">
-    ${flagHTML}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>${seedHTML}
+    ${flagHTML}<span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</span>${seedHTML}${scoreHTML}
   </div>`;
 }
 
