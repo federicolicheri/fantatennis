@@ -1487,7 +1487,35 @@ async function processAllAutoPicks(torneoId, startPick, draftOrdine){
 
     // Nessuna preferenza disponibile
     if(utenteId === currentUser.id){
-      // È il turno dell'utente corrente e non ha lista → aspetta scelta manuale
+      // Controlla se l'utente ha autopick attivo
+      const myAutopickKey = 'autopick_'+torneoId+'_'+currentUser.id;
+      const myAutopick = localStorage.getItem(myAutopickKey) !== 'false';
+      if(myAutopick){
+        // Autopick attivo → assegna automaticamente
+        const {data:tennisti2} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
+        const liberi2 = (tennisti2||[]).filter(t=>!assegnati.has(t.id)&&t.tipo!=='bye');
+        const tds2 = liberi2.filter(t=>t.seed).sort((a,b)=>a.seed-b.seed);
+        const target2 = tds2[0]||liberi2[0];
+        if(target2){
+          const {error:e2} = await supa.from('squadre').insert({
+            utente_id: currentUser.id, torneo_id: torneoId,
+            tennista_id: target2.id, ordine_draft: pick+1,
+          });
+          if(!e2){
+            pick++;
+            const ns2 = pick >= draftOrdine.length ? 'completed' : 'draft';
+            await supa.from('tornei').update({draft_pick_corrente:pick, draft_timer_start:new Date().toISOString(), stato:ns2}).eq('id',torneoId);
+            if(ns2==='completed'){
+              const idx=allTornei.findIndex(t=>t.id===torneoId);
+              if(idx>=0) allTornei[idx].stato='completed';
+              toast('Draft completato!');
+              break;
+            }
+            continue;
+          }
+        }
+      }
+      // Autopick disattivato o errore → aspetta scelta manuale
       break;
     }
 
