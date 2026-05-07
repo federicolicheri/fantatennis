@@ -2487,6 +2487,17 @@ function renderAdm(tab){
         <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
         <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti</button>
       </div>
+    </div>
+    <div class="card" style="margin-top:14px;background:var(--dark2)">
+      <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🗑 Azzera classifica torneo</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Rimuove tutti i punti di un torneo dalla classifica. Utile se annulli o rifai un draft.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="azzeraSelect" class="linput" style="flex:1;min-width:160px;font-size:12px;padding:7px 10px">
+          <option value="">— Seleziona torneo —</option>
+          ${allTornei.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
+        </select>
+        <button class="btn btn-d" onclick="azzeraClassificaTorneo()">Azzera classifica</button>
+      </div>
     </div>`;
   }
 }
@@ -2543,6 +2554,19 @@ async function ricalcolaPuntiAdmin(){
     await calcolaPuntiFanta(t.id);
   }
   // Aggiorna classifica in home
+  classifica = [];
+  renderHome();
+}
+
+async function azzeraClassificaTorneo(){
+  const sel = document.getElementById('azzeraSelect');
+  const torneoId = parseInt(sel?.value);
+  if(!torneoId){ toast('Seleziona un torneo'); return; }
+  const torneo = allTornei.find(t=>t.id===torneoId);
+  if(!confirm('Azzerare la classifica di "' + torneo?.nome + '"?\nQuesta azione rimuove tutti i punti del torneo.')) return;
+  const { error } = await supa.from('classifica').delete().eq('torneo_id', torneoId);
+  if(error){ toast('Errore: ' + error.message); return; }
+  toast('Classifica di "' + torneo?.nome + '" azzerata ✓');
   classifica = [];
   renderHome();
 }
