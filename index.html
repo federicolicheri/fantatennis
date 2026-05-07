@@ -1437,8 +1437,13 @@ async function aggiungiPref(tennista_id){
 async function rimuoviPref(tennista_id){
   window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
   window._prefs.forEach((p,i)=>p.ordine=i+1);
-  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
-  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  const prefListEl = document.getElementById('prefList');
+  if(prefListEl) prefListEl.innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+  const giocEl = document.getElementById('giocatoriList');
+  if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set(), window._squadre||[]);
+  const draftEl = document.getElementById('giocatoriDraftList');
+  if(draftEl) draftEl.innerHTML = renderTabelloneDraft(window._tennisti||[], window._assegnati||new Set(), window._squadre||[]);
+  setTimeout(attachTouchDrag, 50);
 }
 
 async function salvaPref(torneoId){
