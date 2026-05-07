@@ -2184,23 +2184,27 @@ function renderBracketSVG(tennisti){
     perdentiSet.add(r.tennista_perdente_id);
   });
 
-  function winnerSlot(top, bot, showScore){
+  // forRound: turno in cui questo match viene giocato (1-based)
+  function winnerSlot(top, bot, forRound){
     if(!top || top.tipo==='bye') return bot ? {...bot, _score:undefined, _won:undefined, _fromBye:true} : null;
     if(!bot || bot.tipo==='bye') return top ? {...top, _score:undefined, _won:undefined, _fromBye:true} : null;
-    // Check risultati DB
-    if(vincitoriMap[top.id]) return {...top, _score: showScore ? vincitoriMap[top.id].score : undefined, _won: showScore ? true : undefined};
-    if(vincitoriMap[bot.id]) return {...bot, _score: showScore ? vincitoriMap[bot.id].score : undefined, _won: showScore ? true : undefined};
-    // Check eliminato_al_turno
-    if(top.eliminato_al_turno) return {...bot, _score:undefined, _won:undefined, _fromResult:true};
-    if(bot.eliminato_al_turno) return {...top, _score:undefined, _won:undefined, _fromResult:true};
+    // Cerca risultato specifico per questo turno
+    const topRes = vincitoriMap[top.id];
+    const botRes = vincitoriMap[bot.id];
+    if(topRes && topRes.turno === forRound) return {...top, _score:undefined, _won:undefined};
+    if(botRes && botRes.turno === forRound) return {...bot, _score:undefined, _won:undefined};
+    // eliminato_al_turno
+    if(top.eliminato_al_turno && top.eliminato_al_turno < forRound) return {...bot, _score:undefined, _won:undefined};
+    if(bot.eliminato_al_turno && bot.eliminato_al_turno < forRound) return {...top, _score:undefined, _won:undefined};
+    // Nessun risultato per questo turno → TBD
     return {tipo:'tbd', nome:'—', seed:null, flag:null};
   }
 
-  function buildNextSlots(prev){
+  function buildNextSlots(prev, forRound){
     const next = [];
     for(let i=0; i<prev.length; i+=4){
-      next.push(winnerSlot(prev[i], prev[i+1], false));
-      next.push(winnerSlot(prev[i+2], prev[i+3], false));
+      next.push(winnerSlot(prev[i], prev[i+1], forRound));
+      next.push(winnerSlot(prev[i+2], prev[i+3], forRound));
     }
     return next;
   }
@@ -2240,7 +2244,7 @@ function renderBracketSVG(tennisti){
   const allRoundSlots = [slots0enriched];
   let cur = slots0enriched;
   for(let r=0; r<5; r++){
-    cur = buildNextSlots(cur);
+    cur = buildNextSlots(cur, r+1); // r+1 = turno 1-based in cui vengono giocati questi match
     allRoundSlots.push(cur);
   }
 
