@@ -1267,7 +1267,7 @@ function renderPrefList(prefs, assegnati){
       <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
       <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
       ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:rgba(231,76,60,0.12);border:0.5px solid rgba(231,76,60,0.2);color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:5px;line-height:1;flex-shrink:0">✕</button>`}
+      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:rgba(231,76,60,0.15);border:0.5px solid rgba(231,76,60,0.3);color:var(--red);cursor:pointer;font-size:18px;padding:6px 10px;border-radius:6px;line-height:1;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center">✕</button>`}
     </div>`;
   }).join('');
 }
