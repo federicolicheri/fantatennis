@@ -1043,10 +1043,10 @@ async function renderDraft(t, isAdmin){
           setTimeout(schedulePoll, 8000);
           return;
         }
-        // Non è il mio turno → aggiorna solo se è cambiato il pick
+        // Non è il mio turno → aggiorna solo se è cambiato il pick E l'utente non sta interagendo
         const pickCambiato = tr.draft_pick_corrente !== window._lastDraftPick;
         window._lastDraftPick = tr.draft_pick_corrente;
-        if(pickCambiato && document.getElementById('tContent')){
+        if(pickCambiato && document.getElementById('tContent') && !window._userInteracting){
           renderDraft(t, isAdmin);
         } else {
           setTimeout(schedulePoll, 8000);
@@ -1214,6 +1214,7 @@ function renderPrefList(prefs, assegnati){
 
 function dragStart(e, idx){
   _dragSrcIdx = idx;
+  window._userInteracting = true;
   if(e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.style.opacity = '0.4';
 }
@@ -1355,6 +1356,7 @@ function filterPrefGiocatori(){
 }
 
 async function aggiungiPref(tennista_id){
+  window._userInteracting = true; // utente sta modificando la lista
   const t = window._tennisti?.find(t=>t.id===tennista_id);
   if(!t) return;
   window._prefs = window._prefs || [];
@@ -1375,6 +1377,7 @@ async function aggiungiPref(tennista_id){
 }
 
 async function rimuoviPref(tennista_id){
+  window._userInteracting = true;
   window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
   window._prefs.forEach((p,i)=>p.ordine=i+1);
   document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
@@ -1382,8 +1385,8 @@ async function rimuoviPref(tennista_id){
 }
 
 async function salvaPref(torneoId){
+  window._userInteracting = false; // reset dopo salvataggio
   const prefs = window._prefs||[];
-  // Elimina vecchie prefs
   await supa.from('draft_preferenze').delete().eq('torneo_id', torneoId).eq('utente_id', currentUser.id);
   if(prefs.length){
     const rows = prefs.map((p,i)=>({utente_id:currentUser.id, torneo_id:torneoId, tennista_id:p.tennista_id, ordine:i+1}));
@@ -1450,6 +1453,9 @@ async function avviaDraft(torneoId){
   // Processa subito tutti i pick dalla posizione 0
   await processAllAutoPicks(torneoId, 0, snakeOrdine);
 }
+
+// Flag: utente sta interagendo con il draft
+window._userInteracting = false;
 
 async function scegli(tennista_id, torneoId){
   // Carica torneo aggiornato
@@ -1676,9 +1682,15 @@ async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
     break;
   }
 
-  // Ricarica UI
-  const t = allTornei.find(t=>t.id===torneoId);
-  renderDraft(t, currentUser.is_admin);
+  // Ricarica UI solo se NON è il turno dell'utente corrente
+  const {data:torneoCheck} = await supa.from('tornei').select('draft_pick_corrente,draft_ordine').eq('id',torneoId).single();
+  if(torneoCheck){
+    const uidCheck = (torneoCheck.draft_ordine||[])[torneoCheck.draft_pick_corrente||0];
+    if(uidCheck !== currentUser.id){
+      const t = allTornei.find(t=>t.id===torneoId);
+      renderDraft(t, currentUser.is_admin);
+    }
+  }
 }
 
 async function processAutoPicks(torneoId, startPick, draftOrdine){
