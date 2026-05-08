@@ -1258,16 +1258,20 @@ function renderPrefList(prefs, assegnati){
     return `<div 
       draggable="${!taken}"
       data-idx="${i}"
+      data-tid="${p.tennista_id}"
       ondragstart="dragStart(event,${i})"
       ondragover="dragOver(event)"
       ondrop="dragDrop(event,${i})"
       ondragend="dragEnd(event)"
-      style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:5px;margin-bottom:3px;${taken?'opacity:0.4':'cursor:grab'}">
-      <span style="font-size:13px;color:var(--text2);cursor:grab;flex-shrink:0" title="Trascina per riordinare">⠿</span>
-      <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
-      <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
-      ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:rgba(231,76,60,0.15);border:0.5px solid rgba(231,76,60,0.3);color:var(--red);cursor:pointer;font-size:18px;padding:6px 10px;border-radius:6px;line-height:1;flex-shrink:0;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center">✕</button>`}
+      style="position:relative;overflow:hidden;border-radius:5px;margin-bottom:3px">
+      <div class="swipe-delete-bg" style="position:absolute;right:0;top:0;bottom:0;width:70px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;opacity:0;transition:opacity 0.15s;border-radius:5px">Elimina</div>
+      <div class="pref-row-inner" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:5px;${taken?'opacity:0.4':'cursor:grab'};position:relative;transform:translateX(0);transition:transform 0.15s">
+        <span style="font-size:13px;color:var(--text2);cursor:grab;flex-shrink:0">⠿</span>
+        <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
+        <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
+        ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
+        ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1310,6 +1314,10 @@ function reorderPref(fromIdx, toIdx){
 // Touch drag & drop support
 let _touchDragIdx = null;
 let _touchClone = null;
+let _touchStartX = null;
+let _touchStartY = null;
+let _touchMode = null; // 'drag' | 'swipe' | null
+const SWIPE_THRESHOLD = 60; // px per confermare eliminazione
 
 function attachTouchDrag(){
   const items = document.querySelectorAll('#prefList > div[data-idx]');
@@ -1321,51 +1329,101 @@ function attachTouchDrag(){
 }
 
 function onTouchStart(e){
-  const idx = parseInt(e.currentTarget.dataset.idx);
-  e.preventDefault();
-  _touchDragIdx = idx;
   const touch = e.touches[0];
-  // Crea clone visivo
-  _touchClone = e.currentTarget.cloneNode(true);
-  _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.85;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--dark2);border:1.5px solid var(--clay);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.5)`;
-  _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
-  _touchClone.style.top = (touch.clientY - e.currentTarget.offsetHeight/2) + 'px';
-  document.body.appendChild(_touchClone);
-  e.currentTarget.style.opacity = '0.3';
+  _touchStartX = touch.clientX;
+  _touchStartY = touch.clientY;
+  _touchDragIdx = parseInt(e.currentTarget.dataset.idx);
+  _touchMode = null; // decidiamo dopo aver visto la direzione
 }
 
 function onTouchMove(e){
-  if(_touchDragIdx === null || !_touchClone) return;
-  e.preventDefault();
+  if(_touchDragIdx === null) return;
   const touch = e.touches[0];
-  _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth/2) + 'px';
-  _touchClone.style.top = (touch.clientY - 15) + 'px';
-  // Highlight target
-  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
-    el.style.borderColor = 'var(--border)';
-  });
-  const el = document.elementFromPoint(touch.clientX, touch.clientY);
-  const target = el?.closest('#prefList > div[data-idx]');
-  if(target) target.style.borderColor = 'var(--clay)';
+  const dx = touch.clientX - _touchStartX;
+  const dy = touch.clientY - _touchStartY;
+
+  // Determina la modalità al primo movimento significativo
+  if(!_touchMode){
+    if(Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)){
+      _touchMode = 'swipe';
+    } else if(Math.abs(dy) > 8){
+      _touchMode = 'drag';
+    } else {
+      return; // aspetta
+    }
+  }
+
+  if(_touchMode === 'swipe'){
+    e.preventDefault();
+    const el = e.currentTarget;
+    const inner = el.querySelector('.pref-row-inner');
+    const bg = el.querySelector('.swipe-delete-bg');
+    const swipeX = Math.min(0, dx); // solo a sinistra
+    if(inner) inner.style.transform = `translateX(${swipeX}px)`;
+    if(bg) bg.style.opacity = Math.min(1, Math.abs(swipeX) / SWIPE_THRESHOLD);
+  } else if(_touchMode === 'drag'){
+    e.preventDefault();
+    // Clone visivo solo al primo move in drag mode
+    if(!_touchClone){
+      _touchClone = e.currentTarget.cloneNode(true);
+      _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.85;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--dark2);border:1.5px solid var(--clay);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.5)`;
+      _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
+      _touchClone.style.top = (touch.clientY - e.currentTarget.offsetHeight/2) + 'px';
+      document.body.appendChild(_touchClone);
+      e.currentTarget.style.opacity = '0.3';
+    }
+    _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth/2) + 'px';
+    _touchClone.style.top = (touch.clientY - 15) + 'px';
+    document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+      const inner = el.querySelector('.pref-row-inner');
+      if(inner) inner.style.borderColor = 'var(--border)';
+    });
+    const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('#prefList > div[data-idx]');
+    if(target){
+      const inner = target.querySelector('.pref-row-inner');
+      if(inner) inner.style.borderColor = 'var(--clay)';
+    }
+  }
 }
 
 function onTouchEnd(e){
   if(_touchDragIdx === null) return;
-  e.preventDefault();
   const touch = e.changedTouches[0];
-  // Trova target
-  if(_touchClone) { _touchClone.remove(); _touchClone = null; }
-  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
-    el.style.opacity = '';
-    el.style.borderColor = 'var(--border)';
-  });
-  const el = document.elementFromPoint(touch.clientX, touch.clientY);
-  const target = el?.closest('#prefList > div[data-idx]');
-  if(target){
-    const toIdx = parseInt(target.dataset.idx);
-    if(toIdx !== _touchDragIdx) reorderPref(_touchDragIdx, toIdx);
+  const dx = touch.clientX - _touchStartX;
+
+  if(_touchMode === 'swipe'){
+    const el = e.currentTarget;
+    const inner = el.querySelector('.pref-row-inner');
+    const bg = el.querySelector('.swipe-delete-bg');
+    if(Math.abs(dx) >= SWIPE_THRESHOLD){
+      // Elimina con animazione
+      if(inner) inner.style.transform = `translateX(-100%)`;
+      if(bg) bg.style.opacity = '1';
+      const tid = parseInt(el.dataset.tid);
+      setTimeout(()=>rimuoviPref(tid), 200);
+    } else {
+      // Annulla swipe
+      if(inner){ inner.style.transform = 'translateX(0)'; }
+      if(bg){ bg.style.opacity = '0'; }
+    }
+  } else if(_touchMode === 'drag'){
+    if(_touchClone) { _touchClone.remove(); _touchClone = null; }
+    document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+      el.style.opacity = '';
+      const inner = el.querySelector('.pref-row-inner');
+      if(inner) inner.style.borderColor = 'var(--border)';
+    });
+    const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('#prefList > div[data-idx]');
+    if(target){
+      const toIdx = parseInt(target.dataset.idx);
+      if(toIdx !== _touchDragIdx) reorderPref(_touchDragIdx, toIdx);
+    }
   }
+
   _touchDragIdx = null;
+  _touchMode = null;
+  _touchStartX = null;
+  _touchStartY = null;
 }
 
 function renderGiocatoriList(tennisti, prefs, assegnati, squadre){
