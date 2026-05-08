@@ -155,10 +155,6 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
 .sbadge.adm{background:rgba(216,90,48,0.15);color:#F0997B}
 
 /* TOAST */
-@media(hover:hover){
-  .pref-delete-btn{ display:flex !important; align-items:center; justify-content:center; }
-  .pref-delete-btn:hover{ background:rgba(231,76,60,0.25) !important; }
-}
 .toast{position:fixed;bottom:16px;right:16px;background:var(--dark2);border:0.5px solid var(--border2);color:var(--text);font-size:12px;border-radius:8px;padding:10px 16px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:9999;max-width:280px}
 .toast.on{opacity:1}
 
@@ -862,58 +858,6 @@ async function renderDraft(t, isAdmin){
   if(stato === 'upcoming'){
     const draftStart = torneo.draft_start ? new Date(torneo.draft_start) : null;
     const hasFutureStart = draftStart && draftStart > new Date();
-
-    // Ordine snake: usa draft_ordine se già impostato, altrimenti calcola da classifica
-    const ordineDefinitivo = (draftOrdine && draftOrdine.length > 0);
-    let ordineGiro1 = [];
-    if(ordineDefinitivo){
-      // Primo giro dall'ordine salvato
-      ordineGiro1 = draftOrdine.slice(0, allUsers.length);
-    } else {
-      // Calcola ordine previsto dalla classifica (chi ha meno punti sceglie prima)
-      const { data: classData } = await supa.from('classifica').select('utente_id, punti');
-      const ptsByUser = {};
-      (classData||[]).forEach(r => {
-        if(!ptsByUser[r.utente_id]) ptsByUser[r.utente_id] = 0;
-        ptsByUser[r.utente_id] += r.punti||0;
-      });
-      const totPts = allUsers.reduce((acc,u) => { acc[u.id] = ptsByUser[u.id]||0; return acc; }, {});
-      const tuttiZero = Object.values(totPts).every(v=>v===0);
-      if(tuttiZero){
-        // Prima stagione: ordine non ancora definito
-        ordineGiro1 = [];
-      } else {
-        ordineGiro1 = [...allUsers].sort((a,b) => totPts[a.id]-totPts[b.id]).map(u=>u.id);
-      }
-    }
-
-    // Genera tutti i giri snake
-    function buildSnakeHTML(giro1){
-      if(!giro1.length) return `<div style="font-size:11px;color:var(--text2);padding:8px 0;text-align:center">Ordine non ancora definito — Fritz lo imposterà prima del draft</div>`;
-      let html = '';
-      for(let g=0; g<maxGiocatori; g++){
-        const row = g%2===0 ? giro1 : [...giro1].reverse();
-        const pickStart = g * allUsers.length;
-        html += `<div style="margin-bottom:6px">
-          <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:4px">Giro ${g+1}</div>
-          <div style="display:flex;gap:3px;flex-wrap:wrap">
-            ${row.map((uid, idx) => {
-              const u = allUsers.find(u=>u.id===uid);
-              const pickNum = pickStart + idx + 1;
-              const isMe = uid === currentUser.id;
-              return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-                <div style="width:32px;height:32px;border-radius:7px;background:${u?.color||'#888'};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff;${isMe?'box-shadow:0 0 0 2px var(--clay)':''}overflow:hidden;flex-shrink:0">
-                  ${u?.avatar_url?`<img src="${u.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:7px">`:(u?.initials||'?')}
-                </div>
-                <div style="font-size:8px;color:${isMe?'var(--clay)':'var(--text2)'};">${pickNum}</div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-      }
-      return html;
-    }
-
     wrap.innerHTML = `
       <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:10px;padding:20px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:500;margin-bottom:4px">⏳ Draft non ancora avviato</div>
@@ -926,8 +870,7 @@ async function renderDraft(t, isAdmin){
           </div>` : ''}
         ${isAdmin ? `<div id="draftAdminBox">
           <button class="btn btn-p" style="margin-right:8px" onclick="impostaDraftOra(${currentTorneoId})">⏰ Imposta orario</button>
-          <button class="btn btn-g" style="margin-right:8px" onclick="avviaDraft(${currentTorneoId})">▶ Avvia subito</button>
-          <button class="btn btn-g" onclick="impostaOrdineDraft(${currentTorneoId})">🎲 ${ordineDefinitivo?'Rigenera ordine':'Imposta ordine'}</button>
+          <button class="btn btn-g" onclick="avviaDraft(${currentTorneoId})">▶ Avvia subito</button>
         </div>` : ''}
         <div style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--dark3);border-radius:8px;border:0.5px solid var(--border2)">
           <input type="checkbox" id="autopickCheck" ${getAutopick(currentTorneoId)?'checked':''} onchange="setAutopick(currentTorneoId, this.checked)" style="width:16px;height:16px;accent-color:var(--clay);cursor:pointer;flex-shrink:0">
@@ -937,22 +880,7 @@ async function renderDraft(t, isAdmin){
           </div>
         </div>
       </div>
-
-      <!-- ORDINE SNAKE -->
-      <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:500;color:var(--text)">Ordine di scelta</div>
-          <span style="font-size:10px;padding:2px 8px;border-radius:20px;${ordineDefinitivo
-            ? 'background:rgba(39,174,96,0.12);color:var(--green)'
-            : 'background:rgba(243,156,18,0.1);color:var(--yellow)'}">
-            ${ordineDefinitivo ? '✓ Definitivo' : '~ Indicativo'}
-          </span>
-        </div>
-        ${buildSnakeHTML(ordineGiro1)}
-        ${!ordineDefinitivo && ordineGiro1.length ? `<div style="font-size:10px;color:var(--text2);margin-top:8px;padding:6px 8px;background:rgba(243,156,18,0.06);border-radius:5px">⚠️ Ordine previsto dalla classifica attuale — potrebbe variare. Fritz confermerà l'ordine definitivo prima del draft.</div>` : ''}
-      </div>
-
-      <div style="display:grid;grid-template-columns:150px 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div>
           <div class="stitle">La mia lista preferenze</div>
           <div id="prefList" style="margin-bottom:10px">${renderPrefList(prefs||[], assegnati)}</div>
@@ -1101,23 +1029,31 @@ async function renderDraft(t, isAdmin){
   // Smart polling: aggiorna ogni 8s SOLO se NON è il turno dell'utente corrente
   if(stato === 'draft'){
     window._draftPollStop = false;
+    const pollId = Date.now(); // ID univoco per questo ciclo di polling
+    window._draftPollId = pollId;
     const schedulePoll = () => {
       if(window._draftPollStop) return;
-      // Ricarica torneo per vedere se è ancora il turno dell'utente
+      if(window._draftPollId !== pollId) return; // ferma polling vecchi
       supa.from('tornei').select('draft_pick_corrente,draft_ordine,stato').eq('id',currentTorneoId).single().then(({data:tr})=>{
+        if(window._draftPollStop || window._draftPollId !== pollId) return;
         if(!tr || tr.stato !== 'draft') return;
         const uid = (tr.draft_ordine||[])[tr.draft_pick_corrente||0];
-        // Non aggiornare se è il turno dell'utente corrente (sta scegliendo)
+        // Non aggiornare MAI se è il turno dell'utente corrente
         if(uid === currentUser.id) {
-          setTimeout(schedulePoll, 8000); // ricontrolla tra 8s
+          setTimeout(schedulePoll, 8000);
           return;
         }
-        // Non è il mio turno → aggiorna la UI
-        if(document.getElementById('tContent')){
+        // Non è il mio turno → aggiorna solo se è cambiato il pick
+        const pickCambiato = tr.draft_pick_corrente !== window._lastDraftPick;
+        window._lastDraftPick = tr.draft_pick_corrente;
+        if(pickCambiato && document.getElementById('tContent')){
           renderDraft(t, isAdmin);
+        } else {
+          setTimeout(schedulePoll, 8000);
         }
       });
     };
+    window._lastDraftPick = pickCorrente;
     setTimeout(schedulePoll, 8000);
   }
 }
@@ -1262,20 +1198,16 @@ function renderPrefList(prefs, assegnati){
     return `<div 
       draggable="${!taken}"
       data-idx="${i}"
-      data-tid="${p.tennista_id}"
       ondragstart="dragStart(event,${i})"
       ondragover="dragOver(event)"
       ondrop="dragDrop(event,${i})"
       ondragend="dragEnd(event)"
-      style="position:relative;overflow:hidden;border-radius:5px;margin-bottom:3px">
-      <div class="swipe-delete-bg" style="position:absolute;right:0;top:0;bottom:0;width:70px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;opacity:0;transition:opacity 0.15s;border-radius:5px">Elimina</div>
-      <div class="pref-row-inner" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:5px;${taken?'opacity:0.4':'cursor:grab'};position:relative;transform:translateX(0);transition:transform 0.15s">
-        <span style="font-size:13px;color:var(--text2);cursor:grab;flex-shrink:0">⠿</span>
-        <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
-        <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
-        ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-        ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" class="pref-delete-btn" style="background:rgba(231,76,60,0.12);border:0.5px solid rgba(231,76,60,0.2);color:var(--red);cursor:pointer;font-size:13px;padding:4px 8px;border-radius:5px;line-height:1;flex-shrink:0;display:none">✕</button>`}
-      </div>
+      style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card);border:0.5px solid var(--border);border-radius:5px;margin-bottom:3px;${taken?'opacity:0.4':'cursor:grab'}">
+      <span style="font-size:13px;color:var(--text2);cursor:grab;flex-shrink:0" title="Trascina per riordinare">⠿</span>
+      <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
+      <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
+      ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
+      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px;padding:0 2px">✕</button>`}
     </div>`;
   }).join('');
 }
@@ -1318,10 +1250,6 @@ function reorderPref(fromIdx, toIdx){
 // Touch drag & drop support
 let _touchDragIdx = null;
 let _touchClone = null;
-let _touchStartX = null;
-let _touchStartY = null;
-let _touchMode = null; // 'drag' | 'swipe' | null
-const SWIPE_THRESHOLD = 60; // px per confermare eliminazione
 
 function attachTouchDrag(){
   const items = document.querySelectorAll('#prefList > div[data-idx]');
@@ -1333,101 +1261,51 @@ function attachTouchDrag(){
 }
 
 function onTouchStart(e){
+  const idx = parseInt(e.currentTarget.dataset.idx);
+  e.preventDefault();
+  _touchDragIdx = idx;
   const touch = e.touches[0];
-  _touchStartX = touch.clientX;
-  _touchStartY = touch.clientY;
-  _touchDragIdx = parseInt(e.currentTarget.dataset.idx);
-  _touchMode = null; // decidiamo dopo aver visto la direzione
+  // Crea clone visivo
+  _touchClone = e.currentTarget.cloneNode(true);
+  _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.85;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--dark2);border:1.5px solid var(--clay);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.5)`;
+  _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
+  _touchClone.style.top = (touch.clientY - e.currentTarget.offsetHeight/2) + 'px';
+  document.body.appendChild(_touchClone);
+  e.currentTarget.style.opacity = '0.3';
 }
 
 function onTouchMove(e){
-  if(_touchDragIdx === null) return;
+  if(_touchDragIdx === null || !_touchClone) return;
+  e.preventDefault();
   const touch = e.touches[0];
-  const dx = touch.clientX - _touchStartX;
-  const dy = touch.clientY - _touchStartY;
-
-  // Determina la modalità al primo movimento significativo
-  if(!_touchMode){
-    if(Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)){
-      _touchMode = 'swipe';
-    } else if(Math.abs(dy) > 8){
-      _touchMode = 'drag';
-    } else {
-      return; // aspetta
-    }
-  }
-
-  if(_touchMode === 'swipe'){
-    e.preventDefault();
-    const el = e.currentTarget;
-    const inner = el.querySelector('.pref-row-inner');
-    const bg = el.querySelector('.swipe-delete-bg');
-    const swipeX = Math.min(0, dx); // solo a sinistra
-    if(inner) inner.style.transform = `translateX(${swipeX}px)`;
-    if(bg) bg.style.opacity = Math.min(1, Math.abs(swipeX) / SWIPE_THRESHOLD);
-  } else if(_touchMode === 'drag'){
-    e.preventDefault();
-    // Clone visivo solo al primo move in drag mode
-    if(!_touchClone){
-      _touchClone = e.currentTarget.cloneNode(true);
-      _touchClone.style.cssText = `position:fixed;pointer-events:none;opacity:0.85;z-index:9999;width:${e.currentTarget.offsetWidth}px;background:var(--dark2);border:1.5px solid var(--clay);border-radius:6px;padding:5px 8px;font-size:11px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.5)`;
-      _touchClone.style.left = (touch.clientX - e.currentTarget.offsetWidth/2) + 'px';
-      _touchClone.style.top = (touch.clientY - e.currentTarget.offsetHeight/2) + 'px';
-      document.body.appendChild(_touchClone);
-      e.currentTarget.style.opacity = '0.3';
-    }
-    _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth/2) + 'px';
-    _touchClone.style.top = (touch.clientY - 15) + 'px';
-    document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
-      const inner = el.querySelector('.pref-row-inner');
-      if(inner) inner.style.borderColor = 'var(--border)';
-    });
-    const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('#prefList > div[data-idx]');
-    if(target){
-      const inner = target.querySelector('.pref-row-inner');
-      if(inner) inner.style.borderColor = 'var(--clay)';
-    }
-  }
+  _touchClone.style.left = (touch.clientX - _touchClone.offsetWidth/2) + 'px';
+  _touchClone.style.top = (touch.clientY - 15) + 'px';
+  // Highlight target
+  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+    el.style.borderColor = 'var(--border)';
+  });
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const target = el?.closest('#prefList > div[data-idx]');
+  if(target) target.style.borderColor = 'var(--clay)';
 }
 
 function onTouchEnd(e){
   if(_touchDragIdx === null) return;
+  e.preventDefault();
   const touch = e.changedTouches[0];
-  const dx = touch.clientX - _touchStartX;
-
-  if(_touchMode === 'swipe'){
-    const el = e.currentTarget;
-    const inner = el.querySelector('.pref-row-inner');
-    const bg = el.querySelector('.swipe-delete-bg');
-    if(Math.abs(dx) >= SWIPE_THRESHOLD){
-      // Elimina con animazione
-      if(inner) inner.style.transform = `translateX(-100%)`;
-      if(bg) bg.style.opacity = '1';
-      const tid = parseInt(el.dataset.tid);
-      setTimeout(()=>rimuoviPref(tid), 200);
-    } else {
-      // Annulla swipe
-      if(inner){ inner.style.transform = 'translateX(0)'; }
-      if(bg){ bg.style.opacity = '0'; }
-    }
-  } else if(_touchMode === 'drag'){
-    if(_touchClone) { _touchClone.remove(); _touchClone = null; }
-    document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
-      el.style.opacity = '';
-      const inner = el.querySelector('.pref-row-inner');
-      if(inner) inner.style.borderColor = 'var(--border)';
-    });
-    const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('#prefList > div[data-idx]');
-    if(target){
-      const toIdx = parseInt(target.dataset.idx);
-      if(toIdx !== _touchDragIdx) reorderPref(_touchDragIdx, toIdx);
-    }
+  // Trova target
+  if(_touchClone) { _touchClone.remove(); _touchClone = null; }
+  document.querySelectorAll('#prefList > div[data-idx]').forEach(el => {
+    el.style.opacity = '';
+    el.style.borderColor = 'var(--border)';
+  });
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  const target = el?.closest('#prefList > div[data-idx]');
+  if(target){
+    const toIdx = parseInt(target.dataset.idx);
+    if(toIdx !== _touchDragIdx) reorderPref(_touchDragIdx, toIdx);
   }
-
   _touchDragIdx = null;
-  _touchMode = null;
-  _touchStartX = null;
-  _touchStartY = null;
 }
 
 function renderGiocatoriList(tennisti, prefs, assegnati, squadre){
@@ -1499,13 +1377,8 @@ async function aggiungiPref(tennista_id){
 async function rimuoviPref(tennista_id){
   window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
   window._prefs.forEach((p,i)=>p.ordine=i+1);
-  const prefListEl = document.getElementById('prefList');
-  if(prefListEl) prefListEl.innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
-  const giocEl = document.getElementById('giocatoriList');
-  if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set(), window._squadre||[]);
-  const draftEl = document.getElementById('giocatoriDraftList');
-  if(draftEl) draftEl.innerHTML = renderTabelloneDraft(window._tennisti||[], window._assegnati||new Set(), window._squadre||[]);
-  setTimeout(attachTouchDrag, 50);
+  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
 }
 
 async function salvaPref(torneoId){
@@ -1518,38 +1391,6 @@ async function salvaPref(torneoId){
     if(error){ toast('Errore salvataggio: '+error.message); return; }
   }
   toast('Lista salvata ✓');
-}
-
-async function impostaOrdineDraft(torneoId){
-  // Calcola ordine dal DB: chi ha meno punti va prima; se tutti a 0 ordine casuale
-  const { data: classData } = await supa.from('classifica').select('utente_id, punti');
-  const ptsByUser = {};
-  (classData||[]).forEach(r => {
-    if(!ptsByUser[r.utente_id]) ptsByUser[r.utente_id] = 0;
-    ptsByUser[r.utente_id] += r.punti||0;
-  });
-  const tuttiZero = allUsers.every(u => !ptsByUser[u.id]);
-  let giro1;
-  if(tuttiZero){
-    // Prima stagione: estrai casuale
-    giro1 = [...allUsers].sort(()=>Math.random()-0.5).map(u=>u.id);
-  } else {
-    // Inverso classifica: chi ha meno punti sceglie prima
-    giro1 = [...allUsers].sort((a,b)=>(ptsByUser[a.id]||0)-(ptsByUser[b.id]||0)).map(u=>u.id);
-  }
-  const torneo = allTornei.find(t=>t.id===torneoId);
-  const maxGioc = torneo?.max_giocatori||6;
-  const snakeOrdine = [];
-  for(let g=0;g<maxGioc;g++){
-    snakeOrdine.push(...(g%2===0 ? giro1 : [...giro1].reverse()));
-  }
-  const { error } = await supa.from('tornei').update({ draft_ordine: snakeOrdine }).eq('id', torneoId);
-  if(error){ toast('Errore: '+error.message); return; }
-  const idx = allTornei.findIndex(t=>t.id===torneoId);
-  if(idx>=0) allTornei[idx].draft_ordine = snakeOrdine;
-  toast('Ordine draft impostato ✓ — tutti possono vederlo');
-  const t = allTornei.find(t=>t.id===torneoId);
-  renderDraft(t, true);
 }
 
 async function impostaDraftOra(torneoId){
@@ -1759,8 +1600,8 @@ async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
     // Nessuna preferenza disponibile
     if(utenteId === currentUser.id){
       // Controlla se l'utente ha autopick attivo
-      const {data:torneoFreshAp} = await supa.from('tornei').select('draft_autopick_off').eq('id',torneoId).single();
-      const myAutopick = !(torneoFreshAp?.draft_autopick_off||[]).includes(currentUser.id);
+      const myAutopickKey = 'autopick_'+torneoId+'_'+currentUser.id;
+      const myAutopick = localStorage.getItem(myAutopickKey) !== 'false';
       if(myAutopick){
         // Autopick attivo → assegna automaticamente
         const {data:tennisti2} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
@@ -1791,8 +1632,8 @@ async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
     }
 
     // Altro utente senza lista → controlla autopick
-    const {data:torneoAp} = await supa.from('tornei').select('draft_autopick_off').eq('id',torneoId).single();
-    const autopickActive = !(torneoAp?.draft_autopick_off||[]).includes(utenteId);
+    const autopickKey = 'autopick_'+torneoId+'_'+utenteId;
+    const autopickActive = localStorage.getItem(autopickKey) !== 'false';
     if(autopickActive){
       const {data:tennisti} = await supa.from('tennisti')
         .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('slot');
@@ -1928,25 +1769,11 @@ async function processAutoPicks(torneoId, startPick, draftOrdine){
 }
 
 function getAutopick(torneoId){
-  // Legge da allTornei (già caricato) — autopick OFF se l'utente è nell'array draft_autopick_off
-  const t = allTornei.find(t=>t.id===torneoId);
-  const offList = t?.draft_autopick_off || [];
-  return !offList.includes(currentUser?.id);
+  try { return localStorage.getItem('autopick_'+torneoId+'_'+currentUser?.id) !== 'false'; } catch(e){ return true; }
 }
 
 async function setAutopick(torneoId, val){
-  // Salva su Supabase nella colonna draft_autopick_off
-  const t = allTornei.find(t=>t.id===torneoId);
-  let offList = [...(t?.draft_autopick_off || [])];
-  if(!val){
-    if(!offList.includes(currentUser.id)) offList.push(currentUser.id);
-  } else {
-    offList = offList.filter(id => id !== currentUser.id);
-  }
-  await supa.from('tornei').update({ draft_autopick_off: offList }).eq('id', torneoId);
-  // Aggiorna cache locale
-  const idx = allTornei.findIndex(t=>t.id===torneoId);
-  if(idx>=0) allTornei[idx].draft_autopick_off = offList;
+  try { localStorage.setItem('autopick_'+torneoId+'_'+currentUser?.id, val ? 'true' : 'false'); } catch(e){}
   if(val){
     // Se è il mio turno, controlla se la lista è vuota e parti subito
     const {data:torneo} = await supa.from('tornei').select('*').eq('id',torneoId).single();
@@ -2260,75 +2087,37 @@ function renderBracketSVG(tennisti){
     perdentiSet.add(r.tennista_perdente_id);
   });
 
-  // forRound: turno in cui questo match viene giocato (1-based)
-  function winnerSlot(top, bot, forRound){
-    if(!top || top.tipo==='bye') return bot ? {...bot, _score:undefined, _won:undefined, _fromBye:true} : null;
-    if(!bot || bot.tipo==='bye') return top ? {...top, _score:undefined, _won:undefined, _fromBye:true} : null;
-    // Cerca risultato specifico per questo turno
-    const topRes = vincitoriMap[top.id];
-    const botRes = vincitoriMap[bot.id];
-    if(topRes && topRes.turno === forRound) return {...top, _score:undefined, _won:undefined};
-    if(botRes && botRes.turno === forRound) return {...bot, _score:undefined, _won:undefined};
-    // eliminato_al_turno
-    if(top.eliminato_al_turno && top.eliminato_al_turno < forRound) return {...bot, _score:undefined, _won:undefined};
-    if(bot.eliminato_al_turno && bot.eliminato_al_turno < forRound) return {...top, _score:undefined, _won:undefined};
-    // Nessun risultato per questo turno → TBD
+  function winnerSlot(top, bot){
+    if(!top || top.tipo==='bye') return bot ? {...bot, _fromBye:true} : null;
+    if(!bot || bot.tipo==='bye') return top ? {...top, _fromBye:true} : null;
+    // Check risultati DB
+    if(vincitoriMap[top.id]) return {...top, _score: vincitoriMap[top.id].score, _won:true};
+    if(vincitoriMap[bot.id]) return {...bot, _score: vincitoriMap[bot.id].score, _won:true};
+    // Check eliminato_al_turno
+    if(top.eliminato_al_turno) return {...bot, _fromResult:true};
+    if(bot.eliminato_al_turno) return {...top, _fromResult:true};
     return {tipo:'tbd', nome:'—', seed:null, flag:null};
   }
 
-  function buildNextSlots(prev, forRound){
+  function buildNextSlots(prev){
     const next = [];
     for(let i=0; i<prev.length; i+=4){
-      next.push(winnerSlot(prev[i], prev[i+1], forRound));
-      next.push(winnerSlot(prev[i+2], prev[i+3], forRound));
+      next.push(winnerSlot(prev[i], prev[i+1]));
+      next.push(winnerSlot(prev[i+2], prev[i+3]));
     }
     return next;
   }
 
-  function buildNextSlotsWithScore(prev, forRound){
-    // forRound: il turno in cui questi match sono stati giocati (1-based)
-    const next = [];
-    for(let i=0; i<prev.length; i+=4){
-      next.push(winnerSlotForRound(prev[i], prev[i+1], forRound));
-      next.push(winnerSlotForRound(prev[i+2], prev[i+3], forRound));
-    }
-    return next;
-  }
-
-  function winnerSlotForRound(top, bot, forRound){
-    if(!top || top.tipo==='bye') return bot ? {...bot, _score:undefined, _won:undefined, _fromBye:true} : null;
-    if(!bot || bot.tipo==='bye') return top ? {...top, _score:undefined, _won:undefined, _fromBye:true} : null;
-    // Cerca risultato specifico per questo turno
-    const topRes = vincitoriMap[top.id];
-    const botRes = vincitoriMap[bot.id];
-    if(topRes && topRes.turno === forRound) return {...top, _score: topRes.score, _won:true};
-    if(botRes && botRes.turno === forRound) return {...bot, _score: botRes.score, _won:true};
-    // Nessun risultato per questo turno → TBD
-    if(top.eliminato_al_turno && top.eliminato_al_turno <= forRound) return {...bot, _score:undefined, _won:undefined, _fromResult:true};
-    if(bot.eliminato_al_turno && bot.eliminato_al_turno <= forRound) return {...top, _score:undefined, _won:undefined, _fromResult:true};
-    return {tipo:'tbd', nome:'—', seed:null, flag:null};
-  }
-
-  // slots0 arricchito: ogni giocatore ha _won/_score se ha già giocato al turno 1
-  const slots0enriched = slots0.map(p => {
-    if(!p || p.tipo==='bye') return p;
-    if(vincitoriMap[p.id]) return {...p, _won:true, _score: vincitoriMap[p.id].score};
-    if(perdentiSet.has(p.id)) return {...p, _lost:true};
-    return p;
-  });
-
-  const allRoundSlots = [slots0enriched];
-  let cur = slots0enriched;
+  const allRoundSlots = [slots0];
+  let cur = slots0;
   for(let r=0; r<5; r++){
-    cur = buildNextSlots(cur, r+1); // r+1 = turno 1-based in cui vengono giocati questi match
+    cur = buildNextSlots(cur);
     allRoundSlots.push(cur);
   }
 
   const round = _currentBracketRound;
-  // Preview: vincitori del round corrente con punteggio (colonna destra)
-  const nextSlots = allRoundSlots[round+1] ? buildNextSlotsWithScore(allRoundSlots[round], round+1) : null;
-  // Match correnti: per round 0 uso slots0enriched, per round > 0 uso allRoundSlots[round] (senza score)
-  const currentSlots = allRoundSlots[round] || slots0enriched;
+  const currentSlots = allRoundSlots[round] || slots0;
+  const nextSlots = allRoundSlots[round+1] || null;
 
   // Calculate heights
   // Each match in current round occupies 2 slots vertically
@@ -2411,12 +2200,11 @@ function playerRowHTML(p){
   const isQ = p.tipo==='q';
   const isTbd = p.tipo==='tbd';
   const isWinner = !!p._won || !!p._fromBye || !!p._fromResult;
-  const isLoserDirect = !!p._lost;
   
   // Check if this player lost (is in perdentiSet)
   const risultati = window._risultati||[];
   const perdentiSet = new Set(risultati.map(r=>r.tennista_perdente_id));
-  const isLoser = isLoserDirect || (p.id && perdentiSet.has(p.id));
+  const isLoser = p.id && perdentiSet.has(p.id);
 
   const bg = isBye ? 'background:var(--dark3);' : isLoser ? 'background:rgba(0,0,0,0.2);' : '';
   const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
@@ -2707,32 +2495,8 @@ function renderAdm(tab){
         <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
         <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti</button>
       </div>
-    </div>
-    <div class="card" style="margin-top:14px;background:var(--dark2)">
-      <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🗑 Azzera classifica torneo</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Rimuove tutti i punti di un torneo dalla classifica. Utile se annulli o rifai un draft.</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="azzeraSelect" class="linput" style="flex:1;min-width:160px;font-size:12px;padding:7px 10px">
-          <option value="">— Seleziona torneo —</option>
-          ${allTornei.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
-        </select>
-        <button class="btn btn-d" onclick="azzeraClassificaTorneo()">Azzera classifica</button>
-      </div>
     </div>`;
   }
-}
-
-async function azzeraClassificaTorneo(){
-  const sel = document.getElementById('azzeraSelect');
-  const torneoId = parseInt(sel?.value);
-  if(!torneoId){ toast('Seleziona un torneo'); return; }
-  const torneo = allTornei.find(t=>t.id===torneoId);
-  if(!confirm('Azzerare la classifica di "' + torneo?.nome + '"?\nQuesta azione rimuove tutti i punti del torneo.')) return;
-  const { error } = await supa.from('classifica').delete().eq('torneo_id', torneoId);
-  if(error){ toast('Errore: ' + error.message); return; }
-  toast('Classifica di "' + torneo?.nome + '" azzerata ✓');
-  classifica = [];
-  renderHome();
 }
 
 function admTab(tab, btn){
