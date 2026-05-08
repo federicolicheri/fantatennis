@@ -1759,8 +1759,8 @@ async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
     // Nessuna preferenza disponibile
     if(utenteId === currentUser.id){
       // Controlla se l'utente ha autopick attivo
-      const myAutopickKey = 'autopick_'+torneoId+'_'+currentUser.id;
-      const myAutopick = localStorage.getItem(myAutopickKey) !== 'false';
+      const {data:torneoFreshAp} = await supa.from('tornei').select('draft_autopick_off').eq('id',torneoId).single();
+      const myAutopick = !(torneoFreshAp?.draft_autopick_off||[]).includes(currentUser.id);
       if(myAutopick){
         // Autopick attivo → assegna automaticamente
         const {data:tennisti2} = await supa.from('tennisti').select('*').eq('torneo_id',torneoId).not('tipo','eq','bye').order('slot');
@@ -1791,8 +1791,8 @@ async function _processAllAutoPicksInner(torneoId, startPick, draftOrdine){
     }
 
     // Altro utente senza lista → controlla autopick
-    const autopickKey = 'autopick_'+torneoId+'_'+utenteId;
-    const autopickActive = localStorage.getItem(autopickKey) !== 'false';
+    const {data:torneoAp} = await supa.from('tornei').select('draft_autopick_off').eq('id',torneoId).single();
+    const autopickActive = !(torneoAp?.draft_autopick_off||[]).includes(utenteId);
     if(autopickActive){
       const {data:tennisti} = await supa.from('tennisti')
         .select('*').eq('torneo_id', torneoId).not('tipo','eq','bye').order('slot');
@@ -1928,11 +1928,25 @@ async function processAutoPicks(torneoId, startPick, draftOrdine){
 }
 
 function getAutopick(torneoId){
-  try { return localStorage.getItem('autopick_'+torneoId+'_'+currentUser?.id) !== 'false'; } catch(e){ return true; }
+  // Legge da allTornei (già caricato) — autopick OFF se l'utente è nell'array draft_autopick_off
+  const t = allTornei.find(t=>t.id===torneoId);
+  const offList = t?.draft_autopick_off || [];
+  return !offList.includes(currentUser?.id);
 }
 
 async function setAutopick(torneoId, val){
-  try { localStorage.setItem('autopick_'+torneoId+'_'+currentUser?.id, val ? 'true' : 'false'); } catch(e){}
+  // Salva su Supabase nella colonna draft_autopick_off
+  const t = allTornei.find(t=>t.id===torneoId);
+  let offList = [...(t?.draft_autopick_off || [])];
+  if(!val){
+    if(!offList.includes(currentUser.id)) offList.push(currentUser.id);
+  } else {
+    offList = offList.filter(id => id !== currentUser.id);
+  }
+  await supa.from('tornei').update({ draft_autopick_off: offList }).eq('id', torneoId);
+  // Aggiorna cache locale
+  const idx = allTornei.findIndex(t=>t.id===torneoId);
+  if(idx>=0) allTornei[idx].draft_autopick_off = offList;
   if(val){
     // Se è il mio turno, controlla se la lista è vuota e parti subito
     const {data:torneo} = await supa.from('tornei').select('*').eq('id',torneoId).single();
