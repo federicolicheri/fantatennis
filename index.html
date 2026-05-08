@@ -906,9 +906,12 @@ async function renderDraft(t, isAdmin){
         <!-- SINISTRA: squadra + turno -->
         <div>
           <div style="background:var(--dark2);border:0.5px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:10px">
-            <div style="font-size:11px;color:var(--text2);margin-bottom:6px">DRAFT IN CORSO — Giro ${giro}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:11px;color:var(--text2)">DRAFT IN CORSO — Giro ${giro}</div>
+            <button class="btn btn-g" style="font-size:10px;padding:3px 8px" onclick="tTab('draft', document.querySelector('#tTabs .tab.active'))">↺ Aggiorna</button>
+          </div>
             <div style="font-size:12px;margin-bottom:8px">Turno di: <strong style="color:${isMioTurno?'var(--clay)':'var(--text)'}">${isMioTurno?'TUO TURNO!': allUsers.find(u=>u.id===utenteCorrente)?.nickname||'—'}</strong></div>
-            ${isMioTurno ? `<div id="timerBox" style="font-size:11px;color:var(--yellow)">⏱ Timer: 30:00</div>` : ''}
+
           </div>
 
           <div class="stitle">La mia squadra (${miaSq.length}/${maxGiocatori})</div>
@@ -1026,36 +1029,7 @@ async function renderDraft(t, isAdmin){
     }
   }
 
-  // Smart polling: aggiorna ogni 8s SOLO se NON è il turno dell'utente corrente
-  if(stato === 'draft'){
-    window._draftPollStop = false;
-    const pollId = Date.now(); // ID univoco per questo ciclo di polling
-    window._draftPollId = pollId;
-    const schedulePoll = () => {
-      if(window._draftPollStop) return;
-      if(window._draftPollId !== pollId) return; // ferma polling vecchi
-      supa.from('tornei').select('draft_pick_corrente,draft_ordine,stato').eq('id',currentTorneoId).single().then(({data:tr})=>{
-        if(window._draftPollStop || window._draftPollId !== pollId) return;
-        if(!tr || tr.stato !== 'draft') return;
-        const uid = (tr.draft_ordine||[])[tr.draft_pick_corrente||0];
-        // Non aggiornare MAI se è il turno dell'utente corrente
-        if(uid === currentUser.id) {
-          setTimeout(schedulePoll, 8000);
-          return;
-        }
-        // Non è il mio turno → aggiorna solo se è cambiato il pick E l'utente non sta interagendo
-        const pickCambiato = tr.draft_pick_corrente !== window._lastDraftPick;
-        window._lastDraftPick = tr.draft_pick_corrente;
-        if(pickCambiato && document.getElementById('tContent') && !window._userInteracting){
-          renderDraft(t, isAdmin);
-        } else {
-          setTimeout(schedulePoll, 8000);
-        }
-      });
-    };
-    window._lastDraftPick = pickCorrente;
-    setTimeout(schedulePoll, 8000);
-  }
+  // Nessun polling automatico — l'utente aggiorna manualmente premendo il tab Draft
 }
 
 let _dragSrcIdx = null;
@@ -1207,7 +1181,7 @@ function renderPrefList(prefs, assegnati){
       <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
       <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
       ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px;padding:0 2px">✕</button>`}
+      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="event.stopPropagation();rimuoviPref(${p.tennista_id})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:4px 8px">✕</button>`}
     </div>`;
   }).join('');
 }
@@ -1377,11 +1351,20 @@ async function aggiungiPref(tennista_id){
 }
 
 async function rimuoviPref(tennista_id){
-  window._userInteracting = true;
-  window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
-  window._prefs.forEach((p,i)=>p.ordine=i+1);
-  document.getElementById('prefList').innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
-  document.getElementById('giocatoriList').innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set());
+  try {
+    window._userInteracting = true;
+    window._prefs = (window._prefs||[]).filter(p=>p.tennista_id!==tennista_id);
+    window._prefs.forEach((p,i)=>p.ordine=i+1);
+    const prefListEl = document.getElementById('prefList');
+    if(prefListEl) prefListEl.innerHTML = renderPrefList(window._prefs, window._assegnati||new Set());
+    const giocEl = document.getElementById('giocatoriList');
+    if(giocEl) giocEl.innerHTML = renderGiocatoriList(window._tennisti||[], window._prefs, window._assegnati||new Set(), window._squadre||[]);
+    const draftEl = document.getElementById('giocatoriDraftList');
+    if(draftEl) draftEl.innerHTML = renderTabelloneDraft(window._tennisti||[], window._assegnati||new Set(), window._squadre||[]);
+    setTimeout(attachTouchDrag, 50);
+  } catch(err) {
+    toast('Errore rimozione: ' + err.message);
+  }
 }
 
 async function salvaPref(torneoId){
