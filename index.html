@@ -948,7 +948,7 @@ async function renderDraft(t, isAdmin){
         ${!ordineDefinitivo && ordineGiro1.length ? `<div style="font-size:10px;color:var(--text2);margin-top:8px;padding:6px 8px;background:rgba(243,156,18,0.06);border-radius:5px">⚠️ Ordine previsto dalla classifica attuale — potrebbe variare. Fritz confermerà l'ordine definitivo prima del draft.</div>` : ''}
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:12px">
         <div>
           <div class="stitle">La mia lista preferenze</div>
           <div id="prefList" style="margin-bottom:10px">${renderPrefList(prefs||[], assegnati)}</div>
@@ -1267,7 +1267,7 @@ function renderPrefList(prefs, assegnati){
       <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
       <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
       ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:12px;padding:0 2px">✕</button>`}
+      ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" style="background:rgba(231,76,60,0.12);border:0.5px solid rgba(231,76,60,0.2);color:var(--red);cursor:pointer;font-size:14px;padding:4px 8px;border-radius:5px;line-height:1;flex-shrink:0">✕</button>`}
     </div>`;
   }).join('');
 }
