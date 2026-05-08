@@ -155,6 +155,10 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
 .sbadge.adm{background:rgba(216,90,48,0.15);color:#F0997B}
 
 /* TOAST */
+@media(hover:hover){
+  .pref-delete-btn{ display:flex !important; align-items:center; justify-content:center; }
+  .pref-delete-btn:hover{ background:rgba(231,76,60,0.25) !important; }
+}
 .toast{position:fixed;bottom:16px;right:16px;background:var(--dark2);border:0.5px solid var(--border2);color:var(--text);font-size:12px;border-radius:8px;padding:10px 16px;opacity:0;transition:opacity 0.2s;pointer-events:none;z-index:9999;max-width:280px}
 .toast.on{opacity:1}
 
@@ -1270,7 +1274,7 @@ function renderPrefList(prefs, assegnati){
         <span style="font-size:10px;color:var(--text2);width:16px">${i+1}</span>
         <span style="font-size:11px;flex:1">${p.tennisti?.flag||''} ${p.tennisti?.nome||'—'}</span>
         ${p.tennisti?.seed?`<span style="font-size:9px;background:var(--clay);color:#fff;border-radius:2px;padding:1px 3px">${p.tennisti.seed}</span>`:''}
-        ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':''}
+        ${taken?'<span style="font-size:9px;color:var(--text2)">preso</span>':`<button onclick="rimuoviPref(${p.tennista_id})" class="pref-delete-btn" style="background:rgba(231,76,60,0.12);border:0.5px solid rgba(231,76,60,0.2);color:var(--red);cursor:pointer;font-size:13px;padding:4px 8px;border-radius:5px;line-height:1;flex-shrink:0;display:none">✕</button>`}
       </div>
     </div>`;
   }).join('');
