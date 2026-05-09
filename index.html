@@ -2347,11 +2347,15 @@ function renderBracketSVG(tennisti){
     return p;
   });
 
+  console.log('vincitoriMap keys:', Object.keys(vincitoriMap).length, 'risultati:', risultati.length);
+  console.log('sample vincitoriMap:', JSON.stringify(Object.entries(vincitoriMap).slice(0,3)));
   const allRoundSlots = [slots0enriched];
   let cur = slots0enriched;
   for(let r=0; r<5; r++){
-    cur = buildNextSlots(cur, r+1); // r+1 = turno 1-based in cui vengono giocati questi match
+    cur = buildNextSlots(cur, r+1);
     allRoundSlots.push(cur);
+    const nonTbd = cur.filter(s=>s&&s.tipo!=='tbd').length;
+    console.log(`round ${r+1} slots: ${cur.length}, non-tbd: ${nonTbd}`);
   }
 
   const round = _currentBracketRound;
