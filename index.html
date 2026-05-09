@@ -2277,10 +2277,11 @@ function renderBracketSVG(tennisti){
   // Build all rounds
   // Build lookup maps from risultati
   const risultati = window._risultati || [];
-  const vincitoriMap = {}; // tennista_id → {score, is_upset}
+  const vincitoriMap = {}; // tennista_id → array di {score, turno} per ogni vittoria
   const perdentiSet = new Set();
   risultati.forEach(r => {
-    vincitoriMap[r.tennista_vincitore_id] = {score: r.punteggio, upset: r.is_upset, turno: r.turno};
+    if(!vincitoriMap[r.tennista_vincitore_id]) vincitoriMap[r.tennista_vincitore_id] = [];
+    vincitoriMap[r.tennista_vincitore_id].push({score: r.punteggio, upset: r.is_upset, turno: r.turno});
     perdentiSet.add(r.tennista_perdente_id);
   });
 
@@ -2289,10 +2290,12 @@ function renderBracketSVG(tennisti){
     if(!top || top.tipo==='bye') return bot ? {...bot, _score:undefined, _won:undefined, _fromBye:true} : null;
     if(!bot || bot.tipo==='bye') return top ? {...top, _score:undefined, _won:undefined, _fromBye:true} : null;
     // Cerca risultato specifico per questo turno
-    const topRes = vincitoriMap[top.id];
-    const botRes = vincitoriMap[bot.id];
-    if(topRes && topRes.turno === forRound) return {...top, _score:undefined, _won:undefined};
-    if(botRes && botRes.turno === forRound) return {...bot, _score:undefined, _won:undefined};
+    const topWins = vincitoriMap[top.id] || [];
+    const botWins = vincitoriMap[bot.id] || [];
+    const topRes = topWins.find(r => r.turno === forRound);
+    const botRes = botWins.find(r => r.turno === forRound);
+    if(topRes) return {...top, _score:undefined, _won:undefined};
+    if(botRes) return {...bot, _score:undefined, _won:undefined};
     // eliminato_al_turno
     if(top.eliminato_al_turno && top.eliminato_al_turno < forRound) return {...bot, _score:undefined, _won:undefined};
     if(bot.eliminato_al_turno && bot.eliminato_al_turno < forRound) return {...top, _score:undefined, _won:undefined};
@@ -2323,10 +2326,12 @@ function renderBracketSVG(tennisti){
     if(!top || top.tipo==='bye') return bot ? {...bot, _score:undefined, _won:undefined, _fromBye:true} : null;
     if(!bot || bot.tipo==='bye') return top ? {...top, _score:undefined, _won:undefined, _fromBye:true} : null;
     // Cerca risultato specifico per questo turno
-    const topRes = vincitoriMap[top.id];
-    const botRes = vincitoriMap[bot.id];
-    if(topRes && topRes.turno === forRound) return {...top, _score: topRes.score, _won:true};
-    if(botRes && botRes.turno === forRound) return {...bot, _score: botRes.score, _won:true};
+    const topWins = vincitoriMap[top.id] || [];
+    const botWins = vincitoriMap[bot.id] || [];
+    const topRes = topWins.find(r => r.turno === forRound);
+    const botRes = botWins.find(r => r.turno === forRound);
+    if(topRes) return {...top, _score: topRes.score, _won:true};
+    if(botRes) return {...bot, _score: botRes.score, _won:true};
     // Nessun risultato per questo turno → TBD
     if(top.eliminato_al_turno && top.eliminato_al_turno <= forRound) return {...bot, _score:undefined, _won:undefined, _fromResult:true};
     if(bot.eliminato_al_turno && bot.eliminato_al_turno <= forRound) return {...top, _score:undefined, _won:undefined, _fromResult:true};
@@ -2336,7 +2341,8 @@ function renderBracketSVG(tennisti){
   // slots0 arricchito: ogni giocatore ha _won/_score se ha già giocato al turno 1
   const slots0enriched = slots0.map(p => {
     if(!p || p.tipo==='bye') return p;
-    if(vincitoriMap[p.id]) return {...p, _won:true, _score: vincitoriMap[p.id].score};
+    const wins = vincitoriMap[p.id];
+    if(wins && wins.length > 0) return {...p, _won:true, _score: wins[0].score};
     if(perdentiSet.has(p.id)) return {...p, _lost:true};
     return p;
   });
