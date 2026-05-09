@@ -2457,8 +2457,9 @@ function playerRowHTML(p, showingRound){
 
   const bg = isBye ? 'background:var(--dark3);' : isLoser ? 'background:rgba(0,0,0,0.2);' : '';
   // I qualifier che hanno già giocato vanno trattati come giocatori normali
-  const isActiveQ = isQ && p.id && (vincitoriMap2[p.id] || perditePerGiocatore[p.id]);
-  const col = (isBye||(isQ&&!isActiveQ)||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
+  const risultatiQ = window._risultati||[];
+  const hasPlayedQ = isQ && p.id && risultatiQ.some(r => r.tennista_vincitore_id === p.id || r.tennista_perdente_id === p.id);
+  const col = (isBye||(isQ&&!hasPlayedQ)||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
   const fontW = isWinner && !isBye && !isTbd ? 'font-weight:600;' : '';
   const seedHTML = p.seed ? `<span style="font-size:8px;color:#fff;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : '';
   const flagHTML = p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : '';
