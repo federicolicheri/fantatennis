@@ -2394,6 +2394,7 @@ function renderBracketSVG(tennisti){
     const top = Math.round((mi*2) * slotStep);
     const cidx = mi % 4;
 
+    if(round===2 && mi < 3) console.log('ROUND2 match', mi, 'slA:', slA?.nome, slA?._lost, slA?._won, 'slB:', slB?.nome, slB?._lost, slB?._won);
     html += `<div style="position:absolute;left:0;top:${top}px;width:${MW}px;border:1px solid ${altBorders[cidx]};border-radius:5px;background:${altColors[cidx]};overflow:hidden">
       ${playerRowHTML(slA, round+1)}${playerRowHTML(slB, round+1)}
     </div>`;
