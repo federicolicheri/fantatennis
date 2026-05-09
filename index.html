@@ -2395,7 +2395,7 @@ function renderBracketSVG(tennisti){
     const cidx = mi % 4;
 
     html += `<div style="position:absolute;left:0;top:${top}px;width:${MW}px;border:1px solid ${altBorders[cidx]};border-radius:5px;background:${altColors[cidx]};overflow:hidden">
-      ${playerRowHTML(slA)}${playerRowHTML(slB)}
+      ${playerRowHTML(slA, round+1)}${playerRowHTML(slB, round+1)}
     </div>`;
   }
 
@@ -2435,18 +2435,25 @@ function renderBracketSVG(tennisti){
   container.innerHTML = html;
 }
 
-function playerRowHTML(p){
+function playerRowHTML(p, showingRound){
   if(!p) return `<div style="display:flex;align-items:center;gap:4px;padding:3px 7px;font-size:10px;min-height:22px;border-bottom:0.5px solid var(--border);color:var(--text2)"><span>—</span></div>`;
   const isBye = p.tipo==='bye';
   const isQ = p.tipo==='q';
   const isTbd = p.tipo==='tbd';
   const isWinner = !!p._won || !!p._fromBye || !!p._fromResult;
-  const isLoserDirect = !!p._lost;
-  
-  // Check if this player lost (is in perdentiSet)
+
+  // Ingrigisci solo se ha perso esattamente nel turno che stiamo mostrando (showingRound, 1-based)
+  // Per round 0 (1° turno), showingRound=1: grigio se ha perso al turno 1
+  // Per round 1 (2° turno), showingRound=2: grigio se ha perso al turno 2
   const risultati = window._risultati||[];
-  const perdentiSet = new Set(risultati.map(r=>r.tennista_perdente_id));
-  const isLoser = isLoserDirect || (p.id && perdentiSet.has(p.id));
+  let isLoser = false;
+  if(p.id && showingRound != null){
+    const perdita = risultati.find(r => r.tennista_perdente_id === p.id && r.turno === showingRound);
+    isLoser = !!perdita;
+  } else if(p.id && showingRound == null){
+    // fallback: perdente in qualsiasi turno
+    isLoser = risultati.some(r => r.tennista_perdente_id === p.id);
+  }
 
   const bg = isBye ? 'background:var(--dark3);' : isLoser ? 'background:rgba(0,0,0,0.2);' : '';
   const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
