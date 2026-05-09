@@ -2347,15 +2347,11 @@ function renderBracketSVG(tennisti){
     return p;
   });
 
-  console.log('vincitoriMap keys:', Object.keys(vincitoriMap).length, 'risultati:', risultati.length);
-  console.log('sample vincitoriMap:', JSON.stringify(Object.entries(vincitoriMap).slice(0,3)));
   const allRoundSlots = [slots0enriched];
   let cur = slots0enriched;
   for(let r=0; r<5; r++){
     cur = buildNextSlots(cur, r+1);
     allRoundSlots.push(cur);
-    const nonTbd = cur.filter(s=>s&&s.tipo!=='tbd').length;
-    console.log(`round ${r+1} slots: ${cur.length}, non-tbd: ${nonTbd}`);
   }
 
   const round = _currentBracketRound;
@@ -2398,7 +2394,6 @@ function renderBracketSVG(tennisti){
     const top = Math.round((mi*2) * slotStep);
     const cidx = mi % 4;
 
-    if(round===2 && mi < 3) console.log('ROUND2 match', mi, 'slA:', slA?.nome, slA?._lost, slA?._won, 'slB:', slB?.nome, slB?._lost, slB?._won);
     html += `<div style="position:absolute;left:0;top:${top}px;width:${MW}px;border:1px solid ${altBorders[cidx]};border-radius:5px;background:${altColors[cidx]};overflow:hidden">
       ${playerRowHTML(slA, round+1)}${playerRowHTML(slB, round+1)}
     </div>`;
@@ -2461,7 +2456,9 @@ function playerRowHTML(p, showingRound){
   }
 
   const bg = isBye ? 'background:var(--dark3);' : isLoser ? 'background:rgba(0,0,0,0.2);' : '';
-  const col = (isBye||isQ||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
+  // I qualifier che hanno già giocato vanno trattati come giocatori normali
+  const isActiveQ = isQ && p.id && (vincitoriMap2[p.id] || perditePerGiocatore[p.id]);
+  const col = (isBye||(isQ&&!isActiveQ)||isTbd) ? 'color:var(--text2)' : isLoser ? 'color:var(--text2)' : 'color:var(--text)';
   const fontW = isWinner && !isBye && !isTbd ? 'font-weight:600;' : '';
   const seedHTML = p.seed ? `<span style="font-size:8px;color:#fff;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};border-radius:2px;padding:1px 3px;flex-shrink:0">${p.seed}</span>` : '';
   const flagHTML = p.flag ? `<span style="font-size:9px;flex-shrink:0">${p.flag}</span>` : '';
