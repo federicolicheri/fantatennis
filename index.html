@@ -3191,14 +3191,17 @@ Regole:
       <div style="font-size:12px;font-weight:500;margin-bottom:8px;margin-top:12px">Anteprima match da inserire (Turno ${turno})</div>
       ${normali.length === 0 && ritiri.length === 0 ? '<div style="font-size:11px;color:var(--text2)">Nessun nuovo match da inserire.</div>' : ''}
       ${normali.map((m,i) => `
-        <div style="background:var(--dark3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-            <span style="color:var(--green);font-weight:600">${m.vincitoreObj.nome}</span>
+        <div style="background:var(--dark3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px" id="match_${i}">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="color:var(--green);font-weight:600" id="mnorm_v_${i}">${m.vincitoreObj.nome}</span>
             <span style="color:var(--text2)">def.</span>
-            <span style="color:var(--text2)">${m.perdenteObj.nome}</span>
+            <span style="color:var(--text2)" id="mnorm_p_${i}">${m.perdenteObj.nome}</span>
             ${m.isUpset?'<span style="background:rgba(243,156,18,0.2);color:var(--yellow);font-size:9px;padding:1px 5px;border-radius:3px">UPSET ⚡</span>':''}
+            <button onclick="invertiMatch(${i})" style="margin-left:auto;background:var(--dark2);border:0.5px solid var(--border2);border-radius:4px;color:var(--text2);font-size:10px;padding:2px 7px;cursor:pointer">⇄ inverti</button>
           </div>
-          <div style="color:var(--text2)">${m.punteggio||'—'}</div>
+          <input id="mnorm_s_${i}" value="${m.punteggio||''}" placeholder="es. 6-3 7-5" 
+            style="width:100%;background:var(--dark2);border:0.5px solid var(--border2);border-radius:5px;color:var(--text);font-size:11px;padding:5px 8px;font-family:inherit"
+            oninput="window._risNormali[${i}].punteggio=this.value">
         </div>`).join('')}
       ${ritiri.map((m,i) => renderRitiroCard(m, i)).join('')}
       ${nonRisolti.length ? `<div style="font-size:10px;color:var(--text2);margin-top:6px">⚠ ${nonRisolti.length} match non identificati: ${nonRisolti.map(r=>r.vincitore+' vs '+r.perdente).join(', ')}</div>` : ''}
@@ -3218,6 +3221,21 @@ Regole:
   } catch(err) {
     statusEl.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore: ${err.message}</div>`;
   }
+}
+
+function invertiMatch(idx){
+  const m = window._risNormali[idx];
+  if(!m) return;
+  // Scambia vincitore e perdente
+  const tmp = m.vincitoreObj;
+  m.vincitoreObj = m.perdenteObj;
+  m.perdenteObj = tmp;
+  m.isUpset = !!(m.vincitoreObj && m.perdenteObj && !m.vincitoreObj.seed && m.perdenteObj.seed);
+  // Aggiorna UI
+  const vEl = document.getElementById(`mnorm_v_${idx}`);
+  const pEl = document.getElementById(`mnorm_p_${idx}`);
+  if(vEl) vEl.textContent = m.vincitoreObj.nome;
+  if(pEl) pEl.textContent = m.perdenteObj.nome;
 }
 
 function selezionaVincitoreRitiro(idx, vincNome, perdNome){
