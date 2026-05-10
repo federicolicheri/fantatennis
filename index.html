@@ -3275,10 +3275,22 @@ async function confermaRisultati(){
         .eq('id', m.perdenteObj.id);
     }
 
+    // Aggiorna _risultati in memoria e ricarica tabellone
+    const { data: nuoviRis } = await supa.from('risultati').select('*').eq('torneo_id', tid);
+    window._risultati = nuoviRis || [];
+    if(typeof renderBracketSVG === 'function' && window._bracketTennisti){
+      // Ricarica anche eliminato_al_turno aggiornato
+      const { data: tAgg } = await supa.from('tennisti').select('*').eq('torneo_id', tid).order('slot');
+      if(tAgg){ currentTennisti = tAgg; window._bracketTennisti = tAgg; renderBracketSVG(tAgg); }
+    }
+
     document.getElementById('risAnteprima').innerHTML=`
       <div style="background:rgba(39,174,96,0.1);border:0.5px solid rgba(39,174,96,0.3);border-radius:8px;padding:12px;margin-top:10px;font-size:12px;color:var(--green)">
-        ✓ ${nuovi.length} match salvati! Ricalcola i punti per aggiornare la classifica.
-        <div style="margin-top:8px"><button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti ora</button></div>
+        ✓ ${nuovi.length} match salvati! Il tabellone è aggiornato.
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti ora</button>
+          <button class="btn btn-g" onclick="tTab('tabellone', document.querySelector('#tornTabs .tab'))">Vai al tabellone →</button>
+        </div>
       </div>`;
     toast(`${nuovi.length} risultati salvati ✓`);
 
