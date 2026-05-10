@@ -3146,12 +3146,17 @@ Regole:
     const resolved = matches.map(m => {
       const vT = matchTennista(m.vincitore);
       const pT = matchTennista(m.perdente);
+      const isRitiro = !!(m.punteggio && m.punteggio.toLowerCase().includes('ritiro')) ||
+                       (!m.punteggio) ||
+                       (m.punteggio === '-') ||
+                       (m.punteggio === '—');
       const isUpset = !!(vT && pT && !vT.seed && pT.seed);
       return {
         ...m,
         vincitoreObj: vT,
         perdenteObj: pT,
         isUpset,
+        isRitiro,
         gia: giaProcessati.has(vT?.id) || giaProcessati.has(pT?.id)
       };
     });
@@ -3160,43 +3165,93 @@ Regole:
     const nuovi = resolved.filter(r => !r.gia && r.vincitoreObj && r.perdenteObj);
     const nonRisolti = resolved.filter(r => !r.vincitoreObj || !r.perdenteObj);
 
-    statusEl.innerHTML=`<div style="font-size:11px;color:var(--green);margin-bottom:4px">✓ Analisi completata · ${matches.length} match trovati</div>`;
+    // Separa ritiri (da confermare manualmente) da match normali
+    const normali = nuovi.filter(r => !r.isRitiro);
+    const ritiri  = nuovi.filter(r => r.isRitiro);
+
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--green);margin-bottom:4px">✓ Analisi completata · ${matches.length} match trovati${ritiri.length ? ` · ${ritiri.length} ritiro/i da confermare` : ''}</div>`;
     antEl.style.display='block';
+
+    function renderRitiroCard(m, idx) {
+      const nA = m.vincitoreObj.nome;
+      const nB = m.perdenteObj.nome;
+      return `<div style="background:rgba(243,156,18,0.08);border:0.5px solid rgba(243,156,18,0.3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px" id="ritiro_${idx}">
+        <div style="color:var(--yellow);font-size:10px;font-weight:600;margin-bottom:6px">⚠ RITIRO — chi ha vinto?</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="flex:1;font-size:11px;background:var(--dark3);border:0.5px solid var(--border2)" 
+            onclick="selezionaVincitoreRitiro(${idx}, '${nA}', '${nB}')">${nA}</button>
+          <button class="btn" style="flex:1;font-size:11px;background:var(--dark3);border:0.5px solid var(--border2)"
+            onclick="selezionaVincitoreRitiro(${idx}, '${nB}', '${nA}')">${nB}</button>
+        </div>
+        <div id="ritiro_sel_${idx}" style="font-size:10px;color:var(--green);margin-top:4px;display:none"></div>
+      </div>`;
+    }
+
     antEl.innerHTML=`
       <div style="font-size:12px;font-weight:500;margin-bottom:8px;margin-top:12px">Anteprima match da inserire (Turno ${turno})</div>
-      ${nuovi.length === 0 ? '<div style="font-size:11px;color:var(--text2)">Nessun nuovo match da inserire.</div>' :
-        nuovi.map((m,i) => `
-          <div style="background:var(--dark3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-              <span style="color:var(--green);font-weight:600">${m.vincitoreObj.nome}</span>
-              <span style="color:var(--text2)">def.</span>
-              <span style="color:var(--text2)">${m.perdenteObj.nome}</span>
-              ${m.isUpset?'<span style="background:rgba(243,156,18,0.2);color:var(--yellow);font-size:9px;padding:1px 5px;border-radius:3px">UPSET ⚡</span>':''}
-            </div>
-            <div style="color:var(--text2)">${m.punteggio||'—'}</div>
-          </div>`).join('')}
+      ${normali.length === 0 && ritiri.length === 0 ? '<div style="font-size:11px;color:var(--text2)">Nessun nuovo match da inserire.</div>' : ''}
+      ${normali.map((m,i) => `
+        <div style="background:var(--dark3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="color:var(--green);font-weight:600">${m.vincitoreObj.nome}</span>
+            <span style="color:var(--text2)">def.</span>
+            <span style="color:var(--text2)">${m.perdenteObj.nome}</span>
+            ${m.isUpset?'<span style="background:rgba(243,156,18,0.2);color:var(--yellow);font-size:9px;padding:1px 5px;border-radius:3px">UPSET ⚡</span>':''}
+          </div>
+          <div style="color:var(--text2)">${m.punteggio||'—'}</div>
+        </div>`).join('')}
+      ${ritiri.map((m,i) => renderRitiroCard(m, i)).join('')}
       ${nonRisolti.length ? `<div style="font-size:10px;color:var(--text2);margin-top:6px">⚠ ${nonRisolti.length} match non identificati: ${nonRisolti.map(r=>r.vincitore+' vs '+r.perdente).join(', ')}</div>` : ''}
-      ${nuovi.length > 0 ? `
-        <button class="btn btn-p" style="margin-top:10px;width:100%" onclick="confermaRisultati(${JSON.stringify(nuovi).replace(/"/g,'&quot;')}, ${torneoId}, ${turno})">
-          ✓ Conferma e salva ${nuovi.length} match
+      ${(normali.length > 0 || ritiri.length > 0) ? `
+        <button class="btn btn-p" id="btnConfermaRis" style="margin-top:10px;width:100%" onclick="confermaRisultati()">
+          ✓ Conferma e salva match
         </button>` : ''}`;
 
-    // salva per uso in conferma
-    window._risNuovi = nuovi;
+    // salva stato globale
+    window._risNormali  = normali;
+    window._risRitiri   = ritiri;
     window._risTorneoId = torneoId;
-    window._risTurno = turno;
+    window._risTurno    = turno;
+    // mappa ritiri selezionati: index -> {vincitoreObj, perdenteObj}
+    window._ritiriSelezionati = {};
 
   } catch(err) {
     statusEl.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore: ${err.message}</div>`;
   }
 }
 
-async function confermaRisultati(matches, torneoId, turno){
-  if(!matches || !matches.length) return;
-  // usa window._risNuovi se disponibile (evita problemi di serializzazione onclick)
-  const nuovi = window._risNuovi || matches;
-  const tid = window._risTorneoId || torneoId;
-  const tr  = window._risTurno    || turno;
+function selezionaVincitoreRitiro(idx, vincNome, perdNome){
+  // Trova gli oggetti tennista per nome
+  const ritiro = window._risRitiri[idx];
+  const vObj = ritiro.vincitoreObj.nome === vincNome ? ritiro.vincitoreObj : ritiro.perdenteObj;
+  const pObj = ritiro.vincitoreObj.nome === perdNome ? ritiro.vincitoreObj : ritiro.perdenteObj;
+  window._ritiriSelezionati[idx] = { vincitoreObj: vObj, perdenteObj: pObj, punteggio: 'ritiro', isUpset: !!(vObj && pObj && !vObj.seed && pObj.seed) };
+  const selEl = document.getElementById(`ritiro_sel_${idx}`);
+  if(selEl){ selEl.style.display='block'; selEl.textContent = `✓ ${vObj.nome} def. ${pObj.nome}`; }
+  // evidenzia bottone selezionato
+  const card = document.getElementById(`ritiro_${idx}`);
+  if(card) card.querySelectorAll('button').forEach(b => {
+    b.style.background = b.textContent.trim() === vincNome ? 'rgba(39,174,96,0.2)' : 'var(--dark3)';
+    b.style.borderColor = b.textContent.trim() === vincNome ? 'var(--green)' : 'var(--border2)';
+  });
+}
+
+async function confermaRisultati(){
+  const normali = window._risNormali || [];
+  const ritiri  = window._risRitiri  || [];
+  const tid = window._risTorneoId;
+  const tr  = window._risTurno;
+
+  // Verifica che tutti i ritiri siano stati selezionati
+  const ritiriMancanti = ritiri.filter((_, i) => !window._ritiriSelezionati[i]);
+  if(ritiriMancanti.length > 0){
+    toast(`Seleziona il vincitore per ${ritiriMancanti.length} ritiro/i prima di confermare`);
+    return;
+  }
+
+  const ritiriRisolti = Object.values(window._ritiriSelezionati);
+  const nuovi = [...normali, ...ritiriRisolti];
+  if(!nuovi.length){ toast('Nessun match da salvare'); return; }
 
   const btn = document.querySelector('#risAnteprima button');
   if(btn){ btn.disabled=true; btn.textContent='Salvataggio...'; }
