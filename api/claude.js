@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY || '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';
+  const apiKey = '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';
 
   try {
     let body = req.body;
