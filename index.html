@@ -430,6 +430,7 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
           <button class="tab" onclick="admTab('tornei-adm',this)">Tornei</button>
           <button class="tab" onclick="admTab('punti',this)">Punteggi</button>
           <button class="tab" onclick="admTab('risultati',this)">Risultati</button>
+          <button class="tab" onclick="admTab('github',this)">GitHub</button>
         </div>
         <div id="admContent"><div class="empty-state"><div class="spinner"></div></div></div>
       </div>
@@ -2739,26 +2740,96 @@ function renderAdm(tab){
         </tbody>
       </table>
     </div>`;
-  } else {
-    wrap.innerHTML = `<div class="empty-state">
-      <div class="empty-icon">📸</div>
-      Carica uno screenshot dei risultati per aggiornare il bracket e i punti fanta.<br><br>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-p" onclick="toast('Upload risultati — prossimamente')">Carica screenshot</button>
-        <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti</button>
+  } else if(tab === 'risultati') {
+    // ---- TAB RISULTATI: upload screenshot ----
+    wrap.innerHTML = `
+      <div class="card" style="margin-bottom:10px">
+        <div style="font-size:13px;font-weight:500;margin-bottom:12px">📸 Carica risultati da screenshot</div>
+        <div style="margin-bottom:10px">
+          <label class="llabel">Torneo</label>
+          <select id="risTorneoSel" class="linput" style="font-size:12px;padding:7px 10px">
+            <option value="">— Seleziona torneo —</option>
+            ${allTornei.filter(t=>t.stato!=='upcoming').map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:12px">
+          <label class="llabel">Turno</label>
+          <select id="risTurnoSel" class="linput" style="font-size:12px;padding:7px 10px">
+            <option value="1">1° Turno</option>
+            <option value="2">2° Turno</option>
+            <option value="3">3° Turno (Ottavi)</option>
+            <option value="4">Quarti di Finale</option>
+            <option value="5">Semifinale</option>
+            <option value="6">Finale</option>
+          </select>
+        </div>
+        <div id="risUploadArea" onclick="document.getElementById('risScreenshot').click()"
+          style="border:1.5px dashed var(--border2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:10px"
+          onmouseover="this.style.borderColor='var(--clay)'" onmouseout="this.style.borderColor='var(--border2)'">
+          <div style="font-size:28px;margin-bottom:6px">📷</div>
+          <div style="font-size:12px;color:var(--text)">Clicca per caricare screenshot risultati</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Scoreboard TV, app ufficiale, sito torneo…</div>
+          <input type="file" id="risScreenshot" accept="image/*" style="display:none" onchange="analizzaRisultati(event)">
+        </div>
+        <div id="risStatus" style="display:none"></div>
+        <div id="risAnteprima" style="display:none"></div>
       </div>
-    </div>
-    <div class="card" style="margin-top:14px;background:var(--dark2)">
-      <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🗑 Azzera classifica torneo</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Rimuove tutti i punti di un torneo dalla classifica. Utile se annulli o rifai un draft.</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="azzeraSelect" class="linput" style="flex:1;min-width:160px;font-size:12px;padding:7px 10px">
-          <option value="">— Seleziona torneo —</option>
-          ${allTornei.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
-        </select>
-        <button class="btn btn-d" onclick="azzeraClassificaTorneo()">Azzera classifica</button>
+
+      <div class="card" style="margin-bottom:10px;background:var(--dark2)">
+        <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🔄 Ricalcola punti</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Aggiorna la classifica di tutti i tornei con i risultati caricati.</div>
+        <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">Ricalcola punti</button>
       </div>
-    </div>`;
+
+      <div class="card" style="background:var(--dark2)">
+        <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🗑 Azzera classifica torneo</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Rimuove tutti i punti di un torneo dalla classifica.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select id="azzeraSelect" class="linput" style="flex:1;min-width:160px;font-size:12px;padding:7px 10px">
+            <option value="">— Seleziona torneo —</option>
+            ${allTornei.map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
+          </select>
+          <button class="btn btn-d" onclick="azzeraClassificaTorneo()">Azzera classifica</button>
+        </div>
+      </div>`;
+
+  } else if(tab === 'github') {
+    // ---- TAB GITHUB: push automatico ----
+    const savedPat = localStorage.getItem('gh_pat') || '';
+    wrap.innerHTML = `
+      <div class="card" style="margin-bottom:10px">
+        <div style="font-size:13px;font-weight:500;margin-bottom:4px">🚀 Push automatico su GitHub</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:14px">Dopo ogni modifica all'app, puoi fare commit direttamente su <code style="background:var(--dark3);padding:1px 5px;border-radius:3px">federicolicheri/fantatennis</code> senza scaricare nulla.</div>
+
+        <div class="lfield">
+          <label class="llabel">Personal Access Token GitHub</label>
+          <div style="display:flex;gap:6px">
+            <input type="password" id="ghPatInput" class="linput" style="flex:1;font-size:12px" placeholder="ghp_..." value="${savedPat}">
+            <button class="btn btn-g" style="font-size:11px;white-space:nowrap" onclick="salvaGhPat()">Salva</button>
+          </div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px">Il token è salvato solo in localStorage su questo dispositivo.</div>
+        </div>
+
+        <div id="ghTestResult" style="display:none;margin-top:8px"></div>
+        <button class="btn btn-g" style="margin-top:4px;font-size:11px" onclick="testGhPat()">🔍 Verifica connessione</button>
+      </div>
+
+      <div class="card" style="background:var(--dark2)">
+        <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">📤 Commit index.html</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Carica il file index.html aggiornato e fai il commit direttamente su GitHub. Vercel aggiornerà il sito in 1-2 minuti.</div>
+        <div class="lfield">
+          <label class="llabel">Messaggio commit (opzionale)</label>
+          <input type="text" id="ghCommitMsg" class="linput" style="font-size:12px" placeholder="Update app" value="Update index.html">
+        </div>
+        <div id="ghFileArea" onclick="document.getElementById('ghFileInput').click()"
+          style="border:1.5px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:10px"
+          onmouseover="this.style.borderColor='var(--clay)'" onmouseout="this.style.borderColor='var(--border2)'">
+          <div style="font-size:11px;color:var(--text2)" id="ghFileLabel">📄 Seleziona index.html</div>
+          <input type="file" id="ghFileInput" accept=".html" style="display:none" onchange="ghFileSelezionato(event)">
+        </div>
+        <div id="ghPushStatus" style="display:none;margin-bottom:10px"></div>
+        <button class="btn btn-p" onclick="pushSuGithub()" id="ghPushBtn">🚀 Push su GitHub</button>
+      </div>`;
   }
 }
 
@@ -2848,6 +2919,319 @@ function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('on');
   setTimeout(() => t.classList.remove('on'), 2800);
+}
+
+// ============================================================
+// GITHUB PUSH
+// ============================================================
+const GH_OWNER = 'federicolicheri';
+const GH_REPO  = 'fantatennis';
+const GH_FILE  = 'index.html';
+const GH_BRANCH= 'main';
+const GH_PAT_KEY = 'gh_pat';
+
+function getGhPat(){ return localStorage.getItem(GH_PAT_KEY) || ''; }
+
+function salvaGhPat(){
+  const val = document.getElementById('ghPatInput')?.value?.trim();
+  if(!val){ toast('Token vuoto'); return; }
+  localStorage.setItem(GH_PAT_KEY, val);
+  toast('Token salvato ✓');
+}
+
+async function testGhPat(){
+  const pat = getGhPat();
+  const el = document.getElementById('ghTestResult');
+  if(!el) return;
+  if(!pat){ el.style.display='block'; el.innerHTML=`<div style="font-size:11px;color:var(--red)">⚠ Nessun token salvato.</div>`; return; }
+  el.style.display='block';
+  el.innerHTML=`<div style="font-size:11px;color:var(--text2)"><span class="spinner"></span> Verifica in corso...</div>`;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`, {
+      headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if(r.ok){
+      const d = await r.json();
+      el.innerHTML=`<div style="font-size:11px;color:var(--green)">✓ Connesso · ${d.full_name} (${d.private?'privato':'pubblico'})</div>`;
+    } else {
+      el.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore ${r.status} — token non valido o scaduto</div>`;
+    }
+  } catch(e){
+    el.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore di rete: ${e.message}</div>`;
+  }
+}
+
+let _ghFileContent = null;
+
+function ghFileSelezionato(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const label = document.getElementById('ghFileLabel');
+  if(label) label.textContent = `📄 ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  const reader = new FileReader();
+  reader.onload = ev => { _ghFileContent = ev.target.result; };
+  reader.readAsText(file);
+}
+
+async function pushSuGithub(){
+  const pat = getGhPat();
+  const statusEl = document.getElementById('ghPushStatus');
+  const btn = document.getElementById('ghPushBtn');
+  if(!pat){ toast('Imposta prima il PAT GitHub nel campo sopra'); return; }
+  if(!_ghFileContent){ toast('Seleziona prima un file index.html'); return; }
+  const msg = document.getElementById('ghCommitMsg')?.value?.trim() || 'Update index.html';
+
+  statusEl.style.display='block';
+  statusEl.innerHTML=`<div style="font-size:11px;color:var(--text2)"><span class="spinner"></span> Recupero SHA attuale...</div>`;
+  btn.disabled=true;
+
+  try {
+    // Step 1: ottieni SHA del file attuale
+    const getR = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`, {
+      headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if(!getR.ok){ const e=await getR.json(); throw new Error(e.message||`HTTP ${getR.status}`); }
+    const fileData = await getR.json();
+    const sha = fileData.sha;
+
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--text2)"><span class="spinner"></span> Push in corso...</div>`;
+
+    // Step 2: converti in base64 e fai PUT
+    const encoded = btoa(unescape(encodeURIComponent(_ghFileContent)));
+    const putR = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${pat}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: msg,
+        content: encoded,
+        sha: sha,
+        branch: GH_BRANCH
+      })
+    });
+
+    if(!putR.ok){ const e=await putR.json(); throw new Error(e.message||`HTTP ${putR.status}`); }
+    const putData = await putR.json();
+    const commitUrl = putData.commit?.html_url || '#';
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--green);margin-bottom:4px">✓ Commit eseguito! Vercel aggiornerà il sito in 1-2 minuti.</div>
+      <a href="${commitUrl}" target="_blank" style="font-size:10px;color:var(--clay)">Vedi commit su GitHub →</a>`;
+    toast('Push completato ✓ — Vercel si aggiorna!');
+  } catch(e){
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore: ${e.message}</div>`;
+    toast('Errore push: ' + e.message);
+  } finally {
+    btn.disabled=false;
+  }
+}
+
+// ============================================================
+// RISULTATI DA SCREENSHOT (Claude Vision)
+// ============================================================
+async function analizzaRisultati(e){
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const torneoId = parseInt(document.getElementById('risTorneoSel')?.value);
+  const turno    = parseInt(document.getElementById('risTurnoSel')?.value || '1');
+  const statusEl = document.getElementById('risStatus');
+  const antEl    = document.getElementById('risAnteprima');
+  const uploadArea = document.getElementById('risUploadArea');
+
+  if(!torneoId){ toast('Seleziona prima il torneo'); return; }
+
+  // Mostra preview immagine
+  const previewReader = new FileReader();
+  previewReader.onload = ev => {
+    uploadArea.innerHTML = `<img src="${ev.target.result}" style="max-height:180px;border-radius:6px;object-fit:contain">`;
+  };
+  previewReader.readAsDataURL(file);
+
+  statusEl.style.display='block';
+  antEl.style.display='none';
+  statusEl.innerHTML=`<div style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="spinner"></span> Carico tennisti dal DB...</div>`;
+
+  try {
+    // 1. Carica tennisti del torneo
+    const {data: tennisti, error: tErr} = await supa
+      .from('tennisti')
+      .select('id, nome, seed, tipo, slot, eliminato_al_turno')
+      .eq('torneo_id', torneoId)
+      .neq('tipo', 'bye')
+      .order('slot');
+    if(tErr) throw new Error(tErr.message);
+
+    // 2. Carica risultati già esistenti per questo turno
+    const {data: risEsistenti} = await supa
+      .from('risultati')
+      .select('tennista_vincitore_id, tennista_perdente_id')
+      .eq('torneo_id', torneoId)
+      .eq('turno', turno);
+    const giaProcessati = new Set([
+      ...(risEsistenti||[]).map(r=>r.tennista_vincitore_id),
+      ...(risEsistenti||[]).map(r=>r.tennista_perdente_id)
+    ]);
+
+    // 3. Converti immagine in base64
+    statusEl.innerHTML=`<div style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="spinner"></span> Claude analizza lo screenshot...</div>`;
+    const base64 = await new Promise(res => {
+      const r = new FileReader();
+      r.onload = ev => res(ev.target.result.split(',')[1]);
+      r.readAsDataURL(file);
+    });
+
+    // 4. Chiama Claude API
+    const nomiTennisti = tennisti.map(t => `${t.nome}${t.seed?' (TdS '+t.seed+')':''}`).join(', ');
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-client-side-api-key-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: file.type, data: base64 } },
+            { type: 'text', text: `Sei un assistente che analizza screenshot di risultati di tennis.
+
+Questa è la lista dei tennisti presenti nel torneo (usala per fare matching):
+${nomiTennisti}
+
+Dallo screenshot, estrai tutti i match con vincitore, perdente e punteggio.
+Restituisci SOLO un array JSON, senza testo aggiuntivo, senza markdown, senza backtick.
+
+Formato:
+[
+  {"vincitore": "Cognome I.", "perdente": "Cognome I.", "punteggio": "6-3 7-5"}
+]
+
+Regole:
+- Usa esattamente i nomi come appaiono nella lista tennisti fornita (match parziale ok)
+- Se non riesci a identificare un nome, usalo come appare nello screenshot
+- Il punteggio è la stringa dei set (es. "6-3 6-4" o "7-6(4) 6-3 7-5")
+- Includi tutti i match visibili nello screenshot` }
+          ]
+        }]
+      })
+    });
+    if(!response.ok){ const e=await response.json(); throw new Error(e.error?.message||'Errore API Claude'); }
+    const data = await response.json();
+    let raw = data.content[0].text.trim();
+    let matches;
+    try { matches = JSON.parse(raw); }
+    catch { const m=raw.match(/\[[\s\S]*\]/); if(m) matches=JSON.parse(m[0]); else throw new Error('Risposta non parsabile'); }
+
+    // 5. Fai matching nome → tennista_id
+    function matchTennista(nome){
+      if(!nome) return null;
+      const nl = nome.toLowerCase().replace(/[^a-z0-9 ]/g,'');
+      // exact
+      let found = tennisti.find(t => t.nome.toLowerCase() === nome.toLowerCase());
+      if(found) return found;
+      // partial: cognome
+      const parts = nl.split(' ');
+      found = tennisti.find(t => {
+        const tl = t.nome.toLowerCase();
+        return parts.some(p => p.length > 2 && tl.includes(p));
+      });
+      return found || null;
+    }
+
+    const resolved = matches.map(m => {
+      const vT = matchTennista(m.vincitore);
+      const pT = matchTennista(m.perdente);
+      const isUpset = !!(vT && pT && !vT.seed && pT.seed);
+      return {
+        ...m,
+        vincitoreObj: vT,
+        perdenteObj: pT,
+        isUpset,
+        gia: giaProcessati.has(vT?.id) || giaProcessati.has(pT?.id)
+      };
+    });
+
+    // 6. Mostra anteprima
+    const nuovi = resolved.filter(r => !r.gia && r.vincitoreObj && r.perdenteObj);
+    const nonRisolti = resolved.filter(r => !r.vincitoreObj || !r.perdenteObj);
+
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--green);margin-bottom:4px">✓ Analisi completata · ${matches.length} match trovati</div>`;
+    antEl.style.display='block';
+    antEl.innerHTML=`
+      <div style="font-size:12px;font-weight:500;margin-bottom:8px;margin-top:12px">Anteprima match da inserire (Turno ${turno})</div>
+      ${nuovi.length === 0 ? '<div style="font-size:11px;color:var(--text2)">Nessun nuovo match da inserire.</div>' :
+        nuovi.map((m,i) => `
+          <div style="background:var(--dark3);border-radius:7px;padding:10px 12px;margin-bottom:6px;font-size:11px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+              <span style="color:var(--green);font-weight:600">${m.vincitoreObj.nome}</span>
+              <span style="color:var(--text2)">def.</span>
+              <span style="color:var(--text2)">${m.perdenteObj.nome}</span>
+              ${m.isUpset?'<span style="background:rgba(243,156,18,0.2);color:var(--yellow);font-size:9px;padding:1px 5px;border-radius:3px">UPSET ⚡</span>':''}
+            </div>
+            <div style="color:var(--text2)">${m.punteggio||'—'}</div>
+          </div>`).join('')}
+      ${nonRisolti.length ? `<div style="font-size:10px;color:var(--text2);margin-top:6px">⚠ ${nonRisolti.length} match non identificati: ${nonRisolti.map(r=>r.vincitore+' vs '+r.perdente).join(', ')}</div>` : ''}
+      ${nuovi.length > 0 ? `
+        <button class="btn btn-p" style="margin-top:10px;width:100%" onclick="confermaRisultati(${JSON.stringify(nuovi).replace(/"/g,'&quot;')}, ${torneoId}, ${turno})">
+          ✓ Conferma e salva ${nuovi.length} match
+        </button>` : ''}`;
+
+    // salva per uso in conferma
+    window._risNuovi = nuovi;
+    window._risTorneoId = torneoId;
+    window._risTurno = turno;
+
+  } catch(err) {
+    statusEl.innerHTML=`<div style="font-size:11px;color:var(--red)">✕ Errore: ${err.message}</div>`;
+  }
+}
+
+async function confermaRisultati(matches, torneoId, turno){
+  if(!matches || !matches.length) return;
+  // usa window._risNuovi se disponibile (evita problemi di serializzazione onclick)
+  const nuovi = window._risNuovi || matches;
+  const tid = window._risTorneoId || torneoId;
+  const tr  = window._risTurno    || turno;
+
+  const btn = document.querySelector('#risAnteprima button');
+  if(btn){ btn.disabled=true; btn.textContent='Salvataggio...'; }
+
+  try {
+    // Insert risultati
+    const rows = nuovi.map(m => ({
+      torneo_id: tid,
+      turno: tr,
+      tennista_vincitore_id: m.vincitoreObj.id,
+      tennista_perdente_id: m.perdenteObj.id,
+      punteggio: m.punteggio || null,
+      is_upset: m.isUpset || false
+    }));
+    const {error: insErr} = await supa.from('risultati').insert(rows);
+    if(insErr) throw new Error(insErr.message);
+
+    // Aggiorna eliminato_al_turno sui perdenti
+    for(const m of nuovi){
+      await supa.from('tennisti').update({ eliminato_al_turno: tr })
+        .eq('id', m.perdenteObj.id);
+    }
+
+    document.getElementById('risAnteprima').innerHTML=`
+      <div style="background:rgba(39,174,96,0.1);border:0.5px solid rgba(39,174,96,0.3);border-radius:8px;padding:12px;margin-top:10px;font-size:12px;color:var(--green)">
+        ✓ ${nuovi.length} match salvati! Ricalcola i punti per aggiornare la classifica.
+        <div style="margin-top:8px"><button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">🔄 Ricalcola punti ora</button></div>
+      </div>`;
+    toast(`${nuovi.length} risultati salvati ✓`);
+
+  } catch(err) {
+    toast('Errore salvataggio: ' + err.message);
+    if(btn){ btn.disabled=false; btn.textContent='Riprova'; }
+  }
 }
 </script>
 </body>
