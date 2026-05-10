@@ -2120,7 +2120,6 @@ async function processTabellone(e){
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model: 'claude-opus-4-5',
@@ -3086,9 +3085,6 @@ async function analizzaRisultati(e){
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-client-side-api-key-access': 'true',
       },
       body: JSON.stringify({
         model: 'claude-opus-4-5',
