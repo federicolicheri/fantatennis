@@ -3,12 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  // Debug: verifica che la chiave ci sia
-  if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY non trovata nelle env vars' });
-  }
+  const apiKey = process.env.ANTHROPIC_API_KEY || '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';
 
   try {
     let body = req.body;
