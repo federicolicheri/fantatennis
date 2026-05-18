@@ -382,7 +382,7 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
           <button class="tab active" onclick="tTab('info',this)">Info</button>
           <button class="tab" onclick="tTab('tabellone',this)">Tabellone</button>
           <button class="tab" onclick="tTab('draft',this)">Draft</button>
-          <button class="tab" onclick="tTab('pronostici',this)">Pronostici</button>
+          <button class="tab" id="tabPronostici" onclick="tTab('pronostici',this)" style="display:none">Pronostici</button>
           <button class="tab" onclick="tTab('rank-t',this)">Classifica</button>
         </div>
         <div id="tContent"></div>
@@ -730,6 +730,9 @@ function openTorneo(id){
   document.getElementById('tTitle').textContent = t?.nome || '—';
   document.getElementById('tMeta').textContent = `${t?.tipo==='slam'?'Slam':'ATP 1000'} · ${t?.location||''} · ${t?.superficie||''}`;
   document.querySelectorAll('#tTabs .tab').forEach((tab,i)=>tab.classList.toggle('active',i===0));
+  // Mostra/nascondi tab Pronostici in base a has_pronostici
+  const tabPron = document.getElementById('tabPronostici');
+  if(tabPron) tabPron.style.display = t?.has_pronostici ? '' : 'none';
   tTab('info', null);
 }
 
@@ -2815,6 +2818,10 @@ function renderAdm(tab){
             ${allTornei.filter(t=>t.stato!=='upcoming').map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
           </select>
         </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px">
+          <label class="llabel" style="margin:0">Abilita pronostici per questo torneo</label>
+          <input type="checkbox" id="pronAbilitato" style="width:16px;height:16px;cursor:pointer" onchange="toggleHasPronostici()">
+        </div>
         <div style="margin-bottom:10px">
           <label class="llabel">Turno corrente pronostici</label>
           <select id="pronTurnoSel" class="linput" style="font-size:12px;padding:7px 10px">
@@ -3012,6 +3019,19 @@ function loadPronDeadlines(){
   const deadlines = t.pronostici_deadlines || {};
   const dl = document.getElementById('pronDeadline');
   if(dl && deadlines[turno]) dl.value = deadlines[turno];
+  const chk = document.getElementById('pronAbilitato');
+  if(chk) chk.checked = !!t.has_pronostici;
+}
+
+async function toggleHasPronostici(){
+  const torneoId = parseInt(document.getElementById('pronTorneoSel')?.value);
+  if(!torneoId){ toast('Seleziona prima un torneo'); document.getElementById('pronAbilitato').checked=false; return; }
+  const val = document.getElementById('pronAbilitato').checked;
+  const {error} = await supa.from('tornei').update({has_pronostici: val}).eq('id', torneoId);
+  if(error){ toast('Errore: '+error.message); return; }
+  const idx = allTornei.findIndex(t=>t.id===torneoId);
+  if(idx>=0) allTornei[idx].has_pronostici = val;
+  toast(val ? 'Pronostici abilitati ✓' : 'Pronostici disabilitati');
 }
 
 async function renderPronostici(torneoId){
@@ -3031,26 +3051,19 @@ async function renderPronostici(torneoId){
   const pts = PRON_PTS_PER_TURNO[turno] || 0;
   const userId = currentUser?.id;
 
-  // Carica tennisti del torneo in gara (non eliminati o eliminati a turni successivi)
-  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id', torneoId).neq('tipo','bye').order('slot');
+  // Carica tennisti
+  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id', torneoId).order('slot');
+  // Carica risultati per il bracket
+  const {data:risultati} = await supa.from('risultati').select('*').eq('torneo_id', torneoId);
+  window._risultati = risultati || [];
 
-  // Filtra: solo giocatori ancora in gara a questo turno
-  const inGara = (tennisti||[]).filter(t => {
-    if(t.tipo === 'bye') return false;
-    if(!t.eliminato_al_turno) return true; // ancora in gara
-    return t.eliminato_al_turno >= turno;   // eliminato in questo turno o dopo
-  });
-
-  // Carica pronostici già fatti da questo utente (tutti i turni)
+  // Pronostici utente
   const {data:mieiPron} = await supa.from('pronostici')
     .select('*').eq('torneo_id', torneoId).eq('utente_id', userId);
-
-  // Tennisti già scelti nei turni precedenti (non riutilizzabili)
   const giaUsati = new Set((mieiPron||[]).filter(p=>p.turno < turno).map(p=>p.tennista_id));
-  // Scelte del turno corrente
   const scelteCorr = new Set((mieiPron||[]).filter(p=>p.turno === turno).map(p=>p.tennista_id));
 
-  // Carica pronostici di tutti (solo se deadline passata)
+  // Pronostici di tutti (solo dopo deadline)
   let tuttiPron = [];
   if(!isOpen){
     const {data:all} = await supa.from('pronostici').select('*, utenti(nickname,color,initials,avatar_url)')
@@ -3060,6 +3073,7 @@ async function renderPronostici(torneoId){
 
   const TURNO_NAMES = {1:'1° Turno',2:'2° Turno',3:'3° Turno',4:'Ottavi',5:'Quarti',6:'Semifinale',7:'Finale'};
 
+  // Header info
   wrap.innerHTML = `
     <div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -3072,38 +3086,18 @@ async function renderPronostici(torneoId){
         Scegli <strong style="color:var(--text)">${maxScelte} giocatori</strong> · ${pts} pt ciascuno se superano il turno
       </div>
       ${deadline ? `<div style="font-size:10px;color:var(--text2)">Deadline: ${deadline.toLocaleString('it-IT')}</div>` : ''}
-      ${isOpen ? `<div style="font-size:11px;color:var(--text2);margin-top:6px">Selezionate: <strong style="color:var(--clay)">${scelteCorr.size}/${maxScelte}</strong></div>` : ''}
+      ${isOpen ? `<div style="font-size:11px;color:var(--text2);margin-top:6px">Selezionate: <strong style="color:var(--clay)" id="pronCount">${scelteCorr.size}/${maxScelte}</strong></div>` : ''}
     </div>
-
     ${isOpen ? `
     <div style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:0 2px">
-      Tocca un giocatore per selezionarlo. I giocatori in grigio sono già stati scelti in turni precedenti.
+      Tocca un giocatore per selezionarlo. Grigio = già scelto in turni precedenti.
     </div>
-    <div id="pronGrid">
-      ${inGara.map(t => {
-        const giaUsato = giaUsati.has(t.id);
-        const selezionato = scelteCorr.has(t.id);
-        const pieno = scelteCorr.size >= maxScelte && !selezionato;
-        const disabled = giaUsato || pieno;
-        return `<div onclick="${!disabled ? `togglePronostico(${torneoId},${turno},${t.id},${pts})` : ''}"
-          style="display:flex;align-items:center;gap:8px;padding:9px 12px;margin-bottom:4px;border-radius:8px;
-          background:${selezionato?'rgba(216,90,48,0.15)':'var(--card2)'};
-          border:0.5px solid ${selezionato?'var(--clay)':'var(--border)'};
-          opacity:${giaUsato?'0.35':'1'};
-          cursor:${disabled&&!giaUsato?'not-allowed':giaUsato?'default':'pointer'};
-          transition:all 0.15s">
-          <span style="font-size:13px">${t.flag||''}</span>
-          <span style="flex:1;font-size:12px;${selezionato?'color:var(--clay);font-weight:600':''}">${t.nome}</span>
-          ${t.seed?`<span style="font-size:9px;background:${t.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 4px">${t.seed}</span>`:''}
-          ${selezionato?'<span style="font-size:14px">✓</span>':''}
-          ${giaUsato?'<span style="font-size:9px;color:var(--text2)">già scelto</span>':''}
-        </div>`;
-      }).join('')}
-    </div>
+    <div id="pronBracket"></div>
     ` : `
     <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text)">Pronostici di tutti</div>
     ${allUsers.map(u => {
       const upron = tuttiPron.filter(p=>p.utente_id===u.id);
+      const inGara = (tennisti||[]).filter(t=>!t.eliminato_al_turno||t.eliminato_al_turno>=turno);
       const nomiGioc = upron.map(p=>{
         const t = inGara.find(t=>t.id===p.tennista_id);
         return t ? `${t.flag||''} ${t.nome}` : '—';
@@ -3118,7 +3112,87 @@ async function renderPronostici(torneoId){
       </div>`;
     }).join('')}
     `}`;
+
+  // Render bracket per selezione (solo se aperto)
+  if(isOpen && tennisti){
+    renderPronBracket(tennisti, turno, scelteCorr, giaUsati, scelteCorr.size, maxScelte, torneoId, pts);
+  }
 }
+
+function renderPronBracket(tennisti, turno, scelteCorr, giaUsati, nScelte, maxScelte, torneoId, pts){
+  const container = document.getElementById('pronBracket');
+  if(!container) return;
+
+  // Usa stessa logica del tabellone: prendi slot del turno richiesto
+  const bySlot = {};
+  tennisti.forEach(p => bySlot[p.slot] = p);
+  const maxSlot = Math.max(...tennisti.map(p=>p.slot));
+  let slots = [];
+  for(let i=1; i<=maxSlot; i++) slots.push(bySlot[i] || {slot:i, nome:'Bye', tipo:'bye'});
+
+  // Avanza fino al turno richiesto (turno 1 = slot originali)
+  const risultati = window._risultati || [];
+  const vincitoriMap = {};
+  risultati.forEach(r => {
+    if(!vincitoriMap[r.tennista_vincitore_id]) vincitoriMap[r.tennista_vincitore_id] = [];
+    vincitoriMap[r.tennista_vincitore_id].push(r.turno);
+  });
+
+  function winnerOf(top, bot, forRound){
+    if(!top || top.tipo==='bye') return bot ? {...bot, _fromBye:true} : null;
+    if(!bot || bot.tipo==='bye') return top ? {...top, _fromBye:true} : null;
+    if((vincitoriMap[top.id]||[]).includes(forRound)) return top;
+    if((vincitoriMap[bot.id]||[]).includes(forRound)) return bot;
+    if(top.eliminato_al_turno && top.eliminato_al_turno < forRound) return bot;
+    if(bot.eliminato_al_turno && bot.eliminato_al_turno < forRound) return top;
+    return {tipo:'tbd', nome:'—'};
+  }
+
+  function advanceSlots(cur, forRound){
+    const next = [];
+    for(let i=0; i<cur.length; i+=4){
+      next.push(winnerOf(cur[i], cur[i+1], forRound));
+      next.push(winnerOf(cur[i+2], cur[i+3], forRound));
+    }
+    return next;
+  }
+
+  // Avanza fino al turno precedente per ottenere i partecipanti del turno corrente
+  let cur = slots;
+  for(let r=1; r<turno; r++) cur = advanceSlots(cur, r);
+
+  // cur ora contiene i partecipanti al turno corrente, a coppie
+  const matches = [];
+  for(let i=0; i<cur.length; i+=2){
+    const top = cur[i];
+    const bot = cur[i+1];
+    if(top && bot && top.tipo !== 'bye' && bot.tipo !== 'bye' && top.tipo !== 'tbd' && bot.tipo !== 'tbd'){
+      matches.push([top, bot]);
+    }
+  }
+
+  container.innerHTML = matches.map(([top, bot]) => {
+    return [top, bot].map(p => {
+      const giaUsato = giaUsati.has(p.id);
+      const selezionato = scelteCorr.has(p.id);
+      const pieno = nScelte >= maxScelte && !selezionato;
+      const disabled = giaUsato || pieno;
+      return `<div onclick="${!disabled?`togglePronostico(${torneoId},${turno},${p.id},${pts})`:''}"
+        style="display:flex;align-items:center;gap:8px;padding:9px 12px;
+        background:${selezionato?'rgba(216,90,48,0.15)':'var(--card2)'};
+        border:0.5px solid ${selezionato?'var(--clay)':'var(--border)'};
+        opacity:${giaUsato?'0.3':'1'};
+        cursor:${disabled&&!giaUsato?'not-allowed':giaUsato?'default':'pointer'}">
+        <span style="font-size:12px">${p.flag||''}</span>
+        <span style="flex:1;font-size:11px;${selezionato?'color:var(--clay);font-weight:600':''}">${p.nome}</span>
+        ${p.seed?`<span style="font-size:9px;background:${p.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 4px">${p.seed}</span>`:''}
+        ${selezionato?'<span style="color:var(--clay);font-size:13px">✓</span>':''}
+        ${giaUsato?'<span style="font-size:9px;color:var(--text2)">già scelto</span>':''}
+      </div>`;
+    }).join(`<div style="height:1px;background:var(--border2);margin:0 8px"></div>`);
+  }).map(m => `<div style="border-radius:8px;overflow:hidden;border:0.5px solid var(--border);margin-bottom:6px">${m}</div>`).join('');
+}
+
 
 async function togglePronostico(torneoId, turno, tennistId, pts){
   const userId = currentUser?.id;
