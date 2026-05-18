@@ -382,6 +382,7 @@ html,body{height:100%;background:var(--dark);font-family:'DM Sans',sans-serif;co
           <button class="tab active" onclick="tTab('info',this)">Info</button>
           <button class="tab" onclick="tTab('tabellone',this)">Tabellone</button>
           <button class="tab" onclick="tTab('draft',this)">Draft</button>
+          <button class="tab" onclick="tTab('pronostici',this)">Pronostici</button>
           <button class="tab" onclick="tTab('rank-t',this)">Classifica</button>
         </div>
         <div id="tContent"></div>
@@ -777,6 +778,8 @@ async function tTab(tab, btn){
     await renderDraft(t, isAdmin);
   } else if(tab === 'rank-t'){
     await renderClassificaTorneo(currentTorneoId);
+  } else if(tab === 'pronostici'){
+    await renderPronostici(currentTorneoId);
   } else {
     document.getElementById('tContent').innerHTML = tabs[tab] || '';
   }
@@ -789,7 +792,23 @@ async function renderClassificaTorneo(torneoId){
   const {data:classifica} = await supa.from('classifica')
     .select('*, utenti(*)').eq('torneo_id', torneoId).order('punti', {ascending:false});
   
-  if(!classifica || !classifica.length){
+  // Carica pronostici per calcolare punti pronostici per utente
+  const {data:pronostici} = await supa.from('pronostici').select('*').eq('torneo_id', torneoId);
+  const pronByUser = {};
+  (pronostici||[]).forEach(p => {
+    if(!pronByUser[p.utente_id]) pronByUser[p.utente_id] = 0;
+    pronByUser[p.utente_id] += p.punti || 0;
+  });
+
+  // Calcola totale = punti squadra + punti pronostici, poi riordina
+  const combined = (classifica||[]).map(c => ({
+    ...c,
+    ptsSquadra: c.punti || 0,
+    ptsPron: pronByUser[c.utente_id] || 0,
+    ptsTotal: (c.punti || 0) + (pronByUser[c.utente_id] || 0)
+  })).sort((a,b) => b.ptsTotal - a.ptsTotal);
+
+  if(!combined.length){
     wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div>Nessun punteggio ancora. Completa il draft e clicca Ricalcola punti dall admin.</div>';
     return;
   }
@@ -798,18 +817,22 @@ async function renderClassificaTorneo(torneoId){
   const {data:squadre} = await supa.from('squadre')
     .select('*, tennisti(*)').eq('torneo_id', torneoId);
   
-  wrap.innerHTML = classifica.map((c,i) => {
+  wrap.innerHTML = combined.map((c,i) => {
     const u = c.utenti;
     const miaSquadra = (squadre||[]).filter(s=>s.utente_id===c.utente_id);
     return `<div class="rr ${i===0?'r1':''}" style="flex-direction:column;align-items:stretch;padding:10px 12px">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:${miaSquadra.length?'8px':'0'}">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
         <div class="rpos ${i===0?'p1':''}">${i+1}</div>
         <div class="rav" style="background:${u?.color||'#D85A30'}">${u?.avatar_url?`<img src="${u.avatar_url}">`:(u?.initials||'?')}</div>
         <div class="ri">
           <div class="rname">${u?.nickname||'—'}${u?.is_admin?' <span style="font-size:9px;color:var(--clay)">👑</span>':''}</div>
-          <div class="rmeta">${miaSquadra.length} giocatori</div>
+          <div class="rmeta" style="display:flex;gap:6px;align-items:center">
+            <span style="color:var(--clay)">🎾 ${c.ptsSquadra}</span>
+            <span style="color:var(--text2)">+</span>
+            <span style="color:#8E44AD">🔮 ${c.ptsPron}</span>
+          </div>
         </div>
-        <div class="rpts">${c.punti}</div>
+        <div class="rpts">${c.ptsTotal}</div>
       </div>
       ${miaSquadra.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;padding-left:55px">
         ${miaSquadra.map(s=>`<span style="font-size:10px;background:var(--card2);border:0.5px solid var(--border);border-radius:4px;padding:2px 7px;color:var(--text2)">
@@ -2733,7 +2756,7 @@ function renderAdm(tab){
       <table class="atable">
         <thead><tr><th>Turno</th><th>ATP 1000</th><th>Grand Slam</th></tr></thead>
         <tbody>
-          ${[['Vincitore','1000','2000'],['Finale','600','1200'],['Semifinale','360','720'],['Quarti','180','360'],['3° turno','90','180'],['2° turno','45','90'],['1° turno','10','10']].map(([r,p,s])=>
+          ${[['Vincitore','1000','2000'],['Finalista','650','1200'],['Semifinale','400','720'],['Quarti','200','360'],['Ottavi','100','180'],['3° Turno','50','90'],['2° Turno','30','45'],['1° Turno','10','10']].map(([r,p,s])=>
             `<tr><td>${r}</td><td style="color:var(--clay);font-weight:500">${p}</td><td style="color:var(--clay);font-weight:500">${s}</td></tr>`).join('')}
           <tr style="background:var(--clay-light)">
             <td colspan="3" style="color:var(--clay);font-size:11px">⚡ Bonus upset: +50 pt ogni volta che una non-TdS batte una TdS</td>
@@ -2781,6 +2804,37 @@ function renderAdm(tab){
         <div style="font-size:12px;font-weight:500;margin-bottom:4px;color:var(--text)">🔄 Ricalcola punti</div>
         <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Aggiorna la classifica di tutti i tornei con i risultati caricati.</div>
         <button class="btn btn-g" onclick="ricalcolaPuntiAdmin()">Ricalcola punti</button>
+
+      <div class="card" style="margin-bottom:10px">
+        <div style="font-size:13px;font-weight:500;margin-bottom:8px">🔮 Pronostici — Gestione turni</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Imposta il turno corrente e la deadline entro cui i giocatori possono fare i pronostici.</div>
+        <div style="margin-bottom:10px">
+          <label class="llabel">Torneo</label>
+          <select id="pronTorneoSel" class="linput" style="font-size:12px;padding:7px 10px" onchange="loadPronDeadlines()">
+            <option value="">— Seleziona torneo —</option>
+            ${allTornei.filter(t=>t.stato!=='upcoming').map(t=>`<option value="${t.id}">${t.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="llabel">Turno corrente pronostici</label>
+          <select id="pronTurnoSel" class="linput" style="font-size:12px;padding:7px 10px">
+            <option value="1">1° Turno (6 giocatori)</option>
+            <option value="2">2° Turno (5 giocatori)</option>
+            <option value="3">3° Turno (4 giocatori)</option>
+            <option value="4">Ottavi (3 giocatori)</option>
+            <option value="5">Quarti (2 giocatori)</option>
+            <option value="6">Semifinale (1 giocatore)</option>
+            <option value="7">Finale (1 giocatore)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="llabel">Deadline pronostici</label>
+          <input type="datetime-local" id="pronDeadline" class="linput" style="font-size:12px;padding:7px 10px">
+        </div>
+        <button class="btn btn-p" onclick="salvaPronSettings()">Salva impostazioni turno</button>
+        <div id="pronSaveStatus" style="display:none;font-size:11px;margin-top:8px"></div>
+      </div>
+
       </div>
 
       <div class="card" style="background:var(--dark2)">
@@ -2898,6 +2952,7 @@ async function ricalcolaPuntiAdmin(){
   toast('Ricalcolo in corso...');
   for(const t of torneiCompletati){
     await calcolaPuntiFanta(t.id);
+    await calcolaPuntiPronostici(t.id);
   }
   // Aggiorna classifica in home
   classifica = [];
@@ -2912,6 +2967,203 @@ async function resetPwd(uid, nick){
   if(idx>=0){ allUsers[idx].password_hash=newPwd; allUsers[idx].is_tmp_pwd=true; }
   toast('Password di ' + nick + ' resettata a: tennis2026');
   renderAdm('utenti');
+}
+
+
+// ============================================================
+// PRONOSTICI
+// ============================================================
+const PRON_MAX_PER_TURNO = {1:6, 2:5, 3:4, 4:3, 5:2, 6:1, 7:1};
+const PRON_PTS_PER_TURNO = {1:20, 2:30, 3:40, 4:60, 5:100, 6:250, 7:400};
+
+async function salvaPronSettings(){
+  const torneoId = parseInt(document.getElementById('pronTorneoSel')?.value);
+  const turno    = parseInt(document.getElementById('pronTurnoSel')?.value);
+  const deadline = document.getElementById('pronDeadline')?.value;
+  const statusEl = document.getElementById('pronSaveStatus');
+  if(!torneoId){ toast('Seleziona un torneo'); return; }
+  if(!deadline){ toast('Imposta una deadline'); return; }
+
+  // Carica deadlines esistenti
+  const {data:torn} = await supa.from('tornei').select('pronostici_deadlines').eq('id', torneoId).single();
+  const deadlines = torn?.pronostici_deadlines || {};
+  deadlines[turno] = deadline;
+
+  const {error} = await supa.from('tornei').update({
+    pronostici_turno_corrente: turno,
+    pronostici_deadlines: deadlines
+  }).eq('id', torneoId);
+
+  // Aggiorna allTornei in memoria
+  const idx = allTornei.findIndex(t=>t.id===torneoId);
+  if(idx>=0){ allTornei[idx].pronostici_turno_corrente = turno; allTornei[idx].pronostici_deadlines = deadlines; }
+
+  if(statusEl){ statusEl.style.display='block'; statusEl.style.color = error ? 'var(--red)' : 'var(--green)'; statusEl.textContent = error ? '✕ Errore: '+error.message : '✓ Salvato'; }
+  if(!error) toast('Impostazioni pronostici salvate ✓');
+}
+
+function loadPronDeadlines(){
+  const torneoId = parseInt(document.getElementById('pronTorneoSel')?.value);
+  const t = allTornei.find(t=>t.id===torneoId);
+  if(!t) return;
+  const turno = t.pronostici_turno_corrente || 1;
+  const sel = document.getElementById('pronTurnoSel');
+  if(sel) sel.value = turno;
+  const deadlines = t.pronostici_deadlines || {};
+  const dl = document.getElementById('pronDeadline');
+  if(dl && deadlines[turno]) dl.value = deadlines[turno];
+}
+
+async function renderPronostici(torneoId){
+  const wrap = document.getElementById('tContent');
+  wrap.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+
+  const torneo = allTornei.find(t=>t.id===torneoId);
+  if(!torneo){ wrap.innerHTML='<div class="empty-state">Torneo non trovato</div>'; return; }
+
+  const turno = torneo.pronostici_turno_corrente || 1;
+  const deadlines = torneo.pronostici_deadlines || {};
+  const deadlineStr = deadlines[turno];
+  const deadline = deadlineStr ? new Date(deadlineStr) : null;
+  const now = new Date();
+  const isOpen = !deadline || now < deadline;
+  const maxScelte = PRON_MAX_PER_TURNO[turno] || 1;
+  const pts = PRON_PTS_PER_TURNO[turno] || 0;
+  const userId = currentUser?.id;
+
+  // Carica tennisti del torneo in gara (non eliminati o eliminati a turni successivi)
+  const {data:tennisti} = await supa.from('tennisti').select('*').eq('torneo_id', torneoId).neq('tipo','bye').order('slot');
+
+  // Filtra: solo giocatori ancora in gara a questo turno
+  const inGara = (tennisti||[]).filter(t => {
+    if(t.tipo === 'bye') return false;
+    if(!t.eliminato_al_turno) return true; // ancora in gara
+    return t.eliminato_al_turno >= turno;   // eliminato in questo turno o dopo
+  });
+
+  // Carica pronostici già fatti da questo utente (tutti i turni)
+  const {data:mieiPron} = await supa.from('pronostici')
+    .select('*').eq('torneo_id', torneoId).eq('utente_id', userId);
+
+  // Tennisti già scelti nei turni precedenti (non riutilizzabili)
+  const giaUsati = new Set((mieiPron||[]).filter(p=>p.turno < turno).map(p=>p.tennista_id));
+  // Scelte del turno corrente
+  const scelteCorr = new Set((mieiPron||[]).filter(p=>p.turno === turno).map(p=>p.tennista_id));
+
+  // Carica pronostici di tutti (solo se deadline passata)
+  let tuttiPron = [];
+  if(!isOpen){
+    const {data:all} = await supa.from('pronostici').select('*, utenti(nickname,color,initials,avatar_url)')
+      .eq('torneo_id', torneoId).eq('turno', turno);
+    tuttiPron = all || [];
+  }
+
+  const TURNO_NAMES = {1:'1° Turno',2:'2° Turno',3:'3° Turno',4:'Ottavi',5:'Quarti',6:'Semifinale',7:'Finale'};
+
+  wrap.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:500">🔮 ${TURNO_NAMES[turno]}</div>
+        <span style="font-size:10px;background:${isOpen?'rgba(39,174,96,0.15)':'rgba(231,76,60,0.15)'};color:${isOpen?'var(--green)':'var(--red)'};padding:2px 8px;border-radius:10px">
+          ${isOpen ? '🟢 Aperto' : '🔴 Chiuso'}
+        </span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">
+        Scegli <strong style="color:var(--text)">${maxScelte} giocatori</strong> · ${pts} pt ciascuno se superano il turno
+      </div>
+      ${deadline ? `<div style="font-size:10px;color:var(--text2)">Deadline: ${deadline.toLocaleString('it-IT')}</div>` : ''}
+      ${isOpen ? `<div style="font-size:11px;color:var(--text2);margin-top:6px">Selezionate: <strong style="color:var(--clay)">${scelteCorr.size}/${maxScelte}</strong></div>` : ''}
+    </div>
+
+    ${isOpen ? `
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;padding:0 2px">
+      Tocca un giocatore per selezionarlo. I giocatori in grigio sono già stati scelti in turni precedenti.
+    </div>
+    <div id="pronGrid">
+      ${inGara.map(t => {
+        const giaUsato = giaUsati.has(t.id);
+        const selezionato = scelteCorr.has(t.id);
+        const pieno = scelteCorr.size >= maxScelte && !selezionato;
+        const disabled = giaUsato || pieno;
+        return `<div onclick="${!disabled ? `togglePronostico(${torneoId},${turno},${t.id},${pts})` : ''}"
+          style="display:flex;align-items:center;gap:8px;padding:9px 12px;margin-bottom:4px;border-radius:8px;
+          background:${selezionato?'rgba(216,90,48,0.15)':'var(--card2)'};
+          border:0.5px solid ${selezionato?'var(--clay)':'var(--border)'};
+          opacity:${giaUsato?'0.35':'1'};
+          cursor:${disabled&&!giaUsato?'not-allowed':giaUsato?'default':'pointer'};
+          transition:all 0.15s">
+          <span style="font-size:13px">${t.flag||''}</span>
+          <span style="flex:1;font-size:12px;${selezionato?'color:var(--clay);font-weight:600':''}">${t.nome}</span>
+          ${t.seed?`<span style="font-size:9px;background:${t.seed<=4?'#1A1A1A':'var(--clay)'};color:#fff;border-radius:2px;padding:1px 4px">${t.seed}</span>`:''}
+          ${selezionato?'<span style="font-size:14px">✓</span>':''}
+          ${giaUsato?'<span style="font-size:9px;color:var(--text2)">già scelto</span>':''}
+        </div>`;
+      }).join('')}
+    </div>
+    ` : `
+    <div style="font-size:12px;font-weight:500;margin-bottom:10px;color:var(--text)">Pronostici di tutti</div>
+    ${allUsers.map(u => {
+      const upron = tuttiPron.filter(p=>p.utente_id===u.id);
+      const nomiGioc = upron.map(p=>{
+        const t = inGara.find(t=>t.id===p.tennista_id);
+        return t ? `${t.flag||''} ${t.nome}` : '—';
+      }).join(', ');
+      return `<div style="background:var(--card2);border:0.5px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${upron.length?'6px':'0'}">
+          <div class="rav" style="background:${u.color||'#D85A30'};width:28px;height:28px;font-size:11px">${u.avatar_url?`<img src="${u.avatar_url}">`:(u.initials||'?')}</div>
+          <span style="font-size:12px;font-weight:500">${u.nickname}</span>
+          <span style="margin-left:auto;font-size:11px;color:var(--text2)">${upron.length}/${maxScelte}</span>
+        </div>
+        ${upron.length ? `<div style="font-size:11px;color:var(--text2)">${nomiGioc}</div>` : '<div style="font-size:11px;color:var(--text2)">Nessun pronostico</div>'}
+      </div>`;
+    }).join('')}
+    `}`;
+}
+
+async function togglePronostico(torneoId, turno, tennistId, pts){
+  const userId = currentUser?.id;
+  if(!userId) return;
+  const maxScelte = PRON_MAX_PER_TURNO[turno] || 1;
+
+  // Controlla se già selezionato
+  const {data:exist} = await supa.from('pronostici')
+    .select('id').eq('utente_id', userId).eq('torneo_id', torneoId)
+    .eq('turno', turno).eq('tennista_id', tennistId).maybeSingle();
+
+  if(exist){
+    // Deseleziona
+    await supa.from('pronostici').delete().eq('id', exist.id);
+  } else {
+    // Controlla limite
+    const {data:curr} = await supa.from('pronostici').select('id')
+      .eq('utente_id', userId).eq('torneo_id', torneoId).eq('turno', turno);
+    if((curr||[]).length >= maxScelte){ toast(`Puoi scegliere max ${maxScelte} giocatori per questo turno`); return; }
+    await supa.from('pronostici').insert({utente_id:userId, torneo_id:torneoId, turno, tennista_id:tennistId, punti:0});
+  }
+
+  // Refresh
+  await renderPronostici(torneoId);
+}
+
+async function calcolaPuntiPronostici(torneoId){
+  const {data:risultati} = await supa.from('risultati').select('*').eq('torneo_id', torneoId);
+  const {data:pronostici} = await supa.from('pronostici').select('*').eq('torneo_id', torneoId);
+  if(!pronostici||!risultati) return;
+
+  const vincitoriPerTurno = {}; // turno → Set di tennista_id vincitori
+  risultati.forEach(r => {
+    if(!vincitoriPerTurno[r.turno]) vincitoriPerTurno[r.turno] = new Set();
+    vincitoriPerTurno[r.turno].add(r.tennista_vincitore_id);
+  });
+
+  for(const p of pronostici){
+    const vincitori = vincitoriPerTurno[p.turno];
+    const haSuperato = vincitori && vincitori.has(p.tennista_id);
+    const pts = haSuperato ? (PRON_PTS_PER_TURNO[p.turno]||0) : 0;
+    if(p.punti !== pts){
+      await supa.from('pronostici').update({punti: pts}).eq('id', p.id);
+    }
+  }
 }
 
 // ============================================================
