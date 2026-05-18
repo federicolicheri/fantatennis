@@ -2515,11 +2515,16 @@ async function calcolaPuntiFanta(torneoId){
   });
 
   // Aggiorna con i risultati
+  const maxTurno = Math.max(...Object.keys(PUNTI).map(Number));
   (risultati||[]).forEach(r => {
-    // Vincitore avanza al turno successivo
-    const turnoVincitore = r.turno + 1;
+    // Il vincitore raggiunge il turno successivo, ma non oltre il max
+    const turnoVincitore = Math.min(r.turno + 1, maxTurno);
     if(!turnoMax[r.tennista_vincitore_id] || turnoMax[r.tennista_vincitore_id] < turnoVincitore){
       turnoMax[r.tennista_vincitore_id] = turnoVincitore;
+    }
+    // Il vincitore del turno finale ha raggiunto il max → assegna direttamente maxTurno
+    if(r.turno === maxTurno){
+      turnoMax[r.tennista_vincitore_id] = maxTurno;
     }
   });
 
