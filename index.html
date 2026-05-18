@@ -2517,13 +2517,12 @@ async function calcolaPuntiFanta(torneoId){
   // Aggiorna con i risultati
   const maxTurno = Math.max(...Object.keys(PUNTI).map(Number));
   (risultati||[]).forEach(r => {
-    // Il vincitore raggiunge il turno successivo, ma non oltre il max
-    const turnoVincitore = Math.min(r.turno + 1, maxTurno);
-    if(!turnoMax[r.tennista_vincitore_id] || turnoMax[r.tennista_vincitore_id] < turnoVincitore){
-      turnoMax[r.tennista_vincitore_id] = turnoVincitore;
+    // Il perdente prende i punti del turno in cui è stato eliminato
+    if(!turnoMax[r.tennista_perdente_id] || turnoMax[r.tennista_perdente_id] < r.turno){
+      turnoMax[r.tennista_perdente_id] = r.turno;
     }
-    // Il vincitore del turno finale ha raggiunto il max → assegna direttamente maxTurno
-    if(r.turno === maxTurno){
+    // Il vincitore del torneo (turno finale) prende i punti massimi
+    if(r.turno === maxTurno - 1){
       turnoMax[r.tennista_vincitore_id] = maxTurno;
     }
   });
