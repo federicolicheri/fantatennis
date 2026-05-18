@@ -2220,7 +2220,7 @@ async function saveTabellone(players){
 }
 
 function buildBracketHTML(tennisti, isAdmin, t){
-  const ROUND_NAMES = ['1° Turno','2° Turno','3° Turno','Quarti','Semifinali','Finale'];
+  const ROUND_NAMES = ['1° Turno','2° Turno','3° Turno','Ottavi','Quarti','Semifinali','Finale'];
   const ROUND_COLORS = ['#D85A30','#2980B9','#27AE60','#8E44AD','#F39C12','#E74C3C'];
   const currentRound = parseInt(localStorage.getItem('bracket_round_' + currentTorneoId) || '0');
 
@@ -2347,7 +2347,7 @@ function renderBracketSVG(tennisti){
 
   const allRoundSlots = [slots0enriched];
   let cur = slots0enriched;
-  for(let r=0; r<5; r++){
+  for(let r=0; r<6; r++){
     cur = buildNextSlots(cur, r+1);
     allRoundSlots.push(cur);
   }
